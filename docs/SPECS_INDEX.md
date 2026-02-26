@@ -11,7 +11,7 @@ This backlog is intentionally sequenced to mimic real product work: feature deli
 | ID | Spec | Depends On | Status |
 |---|---|---|---|
 | 001 | API versioning baseline + deprecate unversioned root | - | Done |
-| 002 | Global validation pipe + consistent error envelope | 001 | Ready |
+| 002 | Global validation pipe + consistent error envelope | 001 | Done |
 | 003 | `/v1/products` CRUD | 002 | Blocked |
 | 004 | `/v1/categories` CRUD | 002 | Blocked |
 | 005 | Shared pagination helper + products refactor | 003 | Blocked |
