@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { WriteRateLimitModule } from './common/rate-limit/write-rate-limit.module';
 import { DatabaseModule } from './database/database.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { OrdersModule } from './modules/orders/orders.module';
@@ -10,6 +11,7 @@ import { PromotionsModule } from './modules/promotions/promotions.module';
 @Module({
   imports: [
     DatabaseModule,
+    WriteRateLimitModule,
     ProductsModule,
     CategoriesModule,
     OrdersModule,

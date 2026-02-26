@@ -8,16 +8,19 @@ import {
   Post,
   Version,
 } from '@nestjs/common';
-import request from 'supertest';
+import request, { Response } from 'supertest';
 import { App } from 'supertest/types';
 import { IsNotEmpty, IsString } from 'class-validator';
 import { DataSource } from 'typeorm';
 import { AppModule } from './../src/app.module';
+import { DEFAULT_WRITE_RATE_LIMIT } from './../src/common/rate-limit/write-rate-limit.defaults';
+import { WriteRateLimitStore } from './../src/common/rate-limit/write-rate-limit.store';
 import { createDataSourceOptions } from './../src/database/typeorm.config';
 import { setupApp } from './../src/setup-app';
 
 const TEST_DB_NAME = 'nestjs_ecommerce_e2e';
 const TEST_ADMIN_TOKEN = 'test-admin-token';
+const TEST_RATE_LIMIT_MAX_REQUESTS = DEFAULT_WRITE_RATE_LIMIT.limit;
 
 class CreateValidationDto {
   @IsString()
@@ -339,6 +342,8 @@ describe('AppController (e2e)', () => {
     if (!migrationDataSource?.isInitialized) {
       return;
     }
+
+    app.get(WriteRateLimitStore).reset();
 
     await migrationDataSource.query(
       'TRUNCATE TABLE "products", "categories", "orders", "promotions" RESTART IDENTITY CASCADE',
@@ -1525,5 +1530,182 @@ describe('AppController (e2e)', () => {
           'Promotion with id "00000000-0000-0000-0000-000000000000" not found',
       },
     });
+  });
+
+  it('enforces burst write limits across configured write routes', async () => {
+    const assert429Response = (
+      response: Response,
+      expectedPath: string | RegExp,
+    ) => {
+      const body = response.body as ErrorResponseBody;
+
+      if (expectedPath instanceof RegExp) {
+        expect(body.path).toMatch(expectedPath);
+      } else {
+        expect(body.path).toBe(expectedPath);
+      }
+
+      expect(body.error).toMatchObject({
+        code: 'RATE_LIMITED',
+        message: 'Too many requests',
+      });
+      expect(body.timestamp).toBeDefined();
+
+      const retryAfterHeader = response.headers['retry-after'];
+      expect(typeof retryAfterHeader).toBe('string');
+      expect(Number.parseInt(retryAfterHeader, 10)).toBeGreaterThanOrEqual(1);
+    };
+
+    for (
+      let attempt = 0;
+      attempt < TEST_RATE_LIMIT_MAX_REQUESTS;
+      attempt += 1
+    ) {
+      const response = await request(app.getHttpServer())
+        .post('/v1/products')
+        .send({
+          name: `Rate Limited Product ${attempt}`,
+          sku: `RL-PROD-${attempt}`,
+          price: 19.99,
+          status: 'active',
+        });
+
+      expect(response.status).toBe(201);
+    }
+
+    const productsBurstResponse = await request(app.getHttpServer())
+      .post('/v1/products')
+      .send({
+        name: 'Rate Limited Product Final',
+        sku: 'RL-PROD-FINAL',
+        price: 19.99,
+        status: 'active',
+      });
+    expect(productsBurstResponse.status).toBe(429);
+    assert429Response(productsBurstResponse, '/v1/products');
+
+    app.get(WriteRateLimitStore).reset();
+
+    for (
+      let attempt = 0;
+      attempt < TEST_RATE_LIMIT_MAX_REQUESTS;
+      attempt += 1
+    ) {
+      const response = await request(app.getHttpServer())
+        .post('/v1/categories')
+        .send({
+          name: `Rate Limited Category ${attempt}`,
+          isActive: true,
+        });
+
+      expect(response.status).toBe(201);
+    }
+
+    const categoriesBurstResponse = await request(app.getHttpServer())
+      .post('/v1/categories')
+      .send({
+        name: 'Rate Limited Category Final',
+        isActive: true,
+      });
+    expect(categoriesBurstResponse.status).toBe(429);
+    assert429Response(categoriesBurstResponse, '/v1/categories');
+
+    app.get(WriteRateLimitStore).reset();
+
+    for (
+      let attempt = 0;
+      attempt < TEST_RATE_LIMIT_MAX_REQUESTS;
+      attempt += 1
+    ) {
+      const response = await request(app.getHttpServer())
+        .post('/v1/promotions')
+        .set('x-admin-token', TEST_ADMIN_TOKEN)
+        .send({
+          name: `Rate Limited Promotion ${attempt}`,
+          type: 'percentage',
+          value: 10,
+          isActive: true,
+        });
+
+      expect(response.status).toBe(201);
+    }
+
+    const promotionsBurstResponse = await request(app.getHttpServer())
+      .post('/v1/promotions')
+      .set('x-admin-token', TEST_ADMIN_TOKEN)
+      .send({
+        name: 'Rate Limited Promotion Final',
+        type: 'percentage',
+        value: 10,
+        isActive: true,
+      });
+    expect(promotionsBurstResponse.status).toBe(429);
+    assert429Response(promotionsBurstResponse, '/v1/promotions');
+
+    app.get(WriteRateLimitStore).reset();
+
+    for (
+      let attempt = 0;
+      attempt < TEST_RATE_LIMIT_MAX_REQUESTS;
+      attempt += 1
+    ) {
+      const createdOrder = await createOrder({
+        status: 'pending',
+      });
+      const response = await request(app.getHttpServer())
+        .post(`/v1/orders/${createdOrder.id}/cancel`)
+        .send({
+          reason: `Rate-limit cancellation ${attempt}`,
+        });
+
+      expect(response.status).toBe(200);
+    }
+
+    const finalOrder = await createOrder({
+      status: 'pending',
+    });
+    const ordersBurstResponse = await request(app.getHttpServer())
+      .post(`/v1/orders/${finalOrder.id}/cancel`)
+      .send({
+        reason: 'Rate-limit cancellation final',
+      });
+    expect(ordersBurstResponse.status).toBe(429);
+    assert429Response(ordersBurstResponse, /^\/v1\/orders\/[^/]+\/cancel$/);
+  });
+
+  it('keeps read-only GET routes unaffected when write limits are exceeded', async () => {
+    for (
+      let attempt = 0;
+      attempt < TEST_RATE_LIMIT_MAX_REQUESTS;
+      attempt += 1
+    ) {
+      const response = await request(app.getHttpServer())
+        .post('/v1/products')
+        .send({
+          name: `Readable Product ${attempt}`,
+          sku: `RL-GET-${attempt}`,
+          price: 29.99,
+          status: 'active',
+        });
+
+      expect(response.status).toBe(201);
+    }
+
+    await request(app.getHttpServer())
+      .post('/v1/products')
+      .send({
+        name: 'Readable Product Final',
+        sku: 'RL-GET-FINAL',
+        price: 29.99,
+        status: 'active',
+      })
+      .expect(429);
+
+    const getResponse = await request(app.getHttpServer())
+      .get('/v1/products')
+      .expect(200);
+    const body = getResponse.body as PaginatedResponseBody<ProductResponseBody>;
+
+    expect(body.meta.total).toBe(TEST_RATE_LIMIT_MAX_REQUESTS);
   });
 });
