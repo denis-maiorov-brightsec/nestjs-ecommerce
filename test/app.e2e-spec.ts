@@ -60,6 +60,15 @@ interface ProductResponseBody {
   updatedAt: string;
 }
 
+interface CategoryResponseBody {
+  id: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 function applyTestDatabaseEnv(): void {
   process.env.NODE_ENV = 'production';
   process.env.DB_SYNCHRONIZE = 'false';
@@ -132,6 +141,22 @@ describe('AppController (e2e)', () => {
     return response.body as ProductResponseBody;
   };
 
+  const createCategory = async (
+    payload?: Partial<CategoryResponseBody>,
+  ): Promise<CategoryResponseBody> => {
+    const response = await request(app.getHttpServer())
+      .post('/v1/categories')
+      .send({
+        name: 'Electronics',
+        description: 'All electronic products',
+        isActive: true,
+        ...(payload ?? {}),
+      })
+      .expect(201);
+
+    return response.body as CategoryResponseBody;
+  };
+
   beforeAll(async () => {
     applyTestDatabaseEnv();
     await ensureTestDatabase();
@@ -157,7 +182,7 @@ describe('AppController (e2e)', () => {
     }
 
     await migrationDataSource.query(
-      'TRUNCATE TABLE "products" RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE "products", "categories" RESTART IDENTITY CASCADE',
     );
   });
 
@@ -439,6 +464,234 @@ describe('AppController (e2e)', () => {
         code: 'NOT_FOUND',
         message:
           'Product with id "00000000-0000-0000-0000-000000000000" not found',
+      },
+    });
+  });
+
+  it('/v1/categories (POST) creates a category', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/v1/categories')
+      .send({
+        name: 'Office',
+        description: 'Office supplies',
+        isActive: true,
+      })
+      .expect(201);
+
+    const body = response.body as CategoryResponseBody;
+    expect(body.name).toBe('Office');
+    expect(body.description).toBe('Office supplies');
+    expect(body.isActive).toBe(true);
+    expect(typeof body.id).toBe('string');
+    expect(typeof body.createdAt).toBe('string');
+    expect(typeof body.updatedAt).toBe('string');
+  });
+
+  it('/v1/categories (POST) returns validation envelope for invalid payload', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/v1/categories')
+      .send({
+        name: '',
+        isActive: 'true',
+      })
+      .expect(400);
+    const body = response.body as ErrorResponseBody;
+
+    expect(body).toMatchObject({
+      path: '/v1/categories',
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'Request validation failed',
+      },
+    });
+    expect(body.error.details).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: 'name' }),
+        expect.objectContaining({ field: 'isActive' }),
+      ]),
+    );
+  });
+
+  it('/v1/categories (POST) returns 409 for duplicate category name', async () => {
+    await createCategory({ name: 'Accessories' });
+
+    const response = await request(app.getHttpServer())
+      .post('/v1/categories')
+      .send({
+        name: 'Accessories',
+        isActive: true,
+      })
+      .expect(409);
+    const body = response.body as ErrorResponseBody;
+
+    expect(body).toMatchObject({
+      path: '/v1/categories',
+      error: {
+        code: 'CONFLICT',
+        message: 'Category with name "Accessories" already exists',
+      },
+    });
+  });
+
+  it('/v1/categories (GET) lists all created categories', async () => {
+    await createCategory({ name: 'Hardware' });
+    await createCategory({ name: 'Software' });
+
+    const response = await request(app.getHttpServer())
+      .get('/v1/categories')
+      .expect(200);
+
+    expect(response.body).toHaveLength(2);
+    expect(response.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'Hardware' }),
+        expect.objectContaining({ name: 'Software' }),
+      ]),
+    );
+  });
+
+  it('/v1/categories/:id (GET) returns one category', async () => {
+    const createdCategory = await createCategory({ name: 'Furniture' });
+
+    const response = await request(app.getHttpServer())
+      .get(`/v1/categories/${createdCategory.id}`)
+      .expect(200);
+
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        id: createdCategory.id,
+        name: 'Furniture',
+      }),
+    );
+  });
+
+  it('/v1/categories/:id (GET) returns 404 for missing category', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/v1/categories/00000000-0000-0000-0000-000000000000')
+      .expect(404);
+    const body = response.body as ErrorResponseBody;
+
+    expect(body).toMatchObject({
+      path: '/v1/categories/00000000-0000-0000-0000-000000000000',
+      error: {
+        code: 'NOT_FOUND',
+        message:
+          'Category with id "00000000-0000-0000-0000-000000000000" not found',
+      },
+    });
+  });
+
+  it('/v1/categories/:id (PATCH) updates a category', async () => {
+    const createdCategory = await createCategory({
+      name: 'Gaming',
+      description: 'Gaming products',
+      isActive: true,
+    });
+
+    const response = await request(app.getHttpServer())
+      .patch(`/v1/categories/${createdCategory.id}`)
+      .send({
+        description: 'Gaming and accessories',
+        isActive: false,
+      })
+      .expect(200);
+
+    const body = response.body as CategoryResponseBody;
+    expect(body.id).toBe(createdCategory.id);
+    expect(body.name).toBe('Gaming');
+    expect(body.description).toBe('Gaming and accessories');
+    expect(body.isActive).toBe(false);
+    expect(typeof body.createdAt).toBe('string');
+    expect(typeof body.updatedAt).toBe('string');
+  });
+
+  it('/v1/categories/:id (PATCH) validates partial updates', async () => {
+    const createdCategory = await createCategory();
+
+    const response = await request(app.getHttpServer())
+      .patch(`/v1/categories/${createdCategory.id}`)
+      .send({
+        isActive: 'false',
+      })
+      .expect(400);
+    const body = response.body as ErrorResponseBody;
+
+    expect(body).toMatchObject({
+      path: `/v1/categories/${createdCategory.id}`,
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'Request validation failed',
+      },
+    });
+    expect(body.error.details).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'isActive' })]),
+    );
+  });
+
+  it('/v1/categories/:id (PATCH) returns 409 for duplicate category name', async () => {
+    const baseCategory = await createCategory({ name: 'Audio' });
+    const targetCategory = await createCategory({ name: 'Video' });
+
+    const response = await request(app.getHttpServer())
+      .patch(`/v1/categories/${targetCategory.id}`)
+      .send({
+        name: baseCategory.name,
+      })
+      .expect(409);
+    const body = response.body as ErrorResponseBody;
+
+    expect(body).toMatchObject({
+      path: `/v1/categories/${targetCategory.id}`,
+      error: {
+        code: 'CONFLICT',
+        message: 'Category with name "Audio" already exists',
+      },
+    });
+  });
+
+  it('/v1/categories/:id (PATCH) returns 404 for missing category', async () => {
+    const response = await request(app.getHttpServer())
+      .patch('/v1/categories/00000000-0000-0000-0000-000000000000')
+      .send({
+        isActive: false,
+      })
+      .expect(404);
+    const body = response.body as ErrorResponseBody;
+
+    expect(body).toMatchObject({
+      path: '/v1/categories/00000000-0000-0000-0000-000000000000',
+      error: {
+        code: 'NOT_FOUND',
+        message:
+          'Category with id "00000000-0000-0000-0000-000000000000" not found',
+      },
+    });
+  });
+
+  it('/v1/categories/:id (DELETE) returns 204 and removes category', async () => {
+    const createdCategory = await createCategory();
+
+    await request(app.getHttpServer())
+      .delete(`/v1/categories/${createdCategory.id}`)
+      .expect(204);
+
+    await request(app.getHttpServer())
+      .get(`/v1/categories/${createdCategory.id}`)
+      .expect(404);
+  });
+
+  it('/v1/categories/:id (DELETE) returns 404 for missing category', async () => {
+    const response = await request(app.getHttpServer())
+      .delete('/v1/categories/00000000-0000-0000-0000-000000000000')
+      .expect(404);
+    const body = response.body as ErrorResponseBody;
+
+    expect(body).toMatchObject({
+      path: '/v1/categories/00000000-0000-0000-0000-000000000000',
+      error: {
+        code: 'NOT_FOUND',
+        message:
+          'Category with id "00000000-0000-0000-0000-000000000000" not found',
       },
     });
   });
