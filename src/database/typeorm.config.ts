@@ -9,6 +9,14 @@ const toNumber = (value: string | undefined, fallback: number): number => {
 const isTrue = (value: string | undefined): boolean =>
   (value ?? '').toLowerCase() === 'true';
 
+const resolveSynchronize = (): boolean => {
+  if (process.env.DB_SYNCHRONIZE !== undefined) {
+    return isTrue(process.env.DB_SYNCHRONIZE);
+  }
+
+  return process.env.NODE_ENV !== 'production';
+};
+
 const baseOptions = () => ({
   type: 'postgres' as const,
   host: process.env.DB_HOST ?? 'localhost',
@@ -22,7 +30,7 @@ const baseOptions = () => ({
 export const createTypeOrmOptions = (): TypeOrmModuleOptions => ({
   ...baseOptions(),
   autoLoadEntities: true,
-  synchronize: isTrue(process.env.DB_SYNCHRONIZE) || process.env.NODE_ENV !== 'production',
+  synchronize: resolveSynchronize(),
 });
 
 export const createDataSourceOptions = (): DataSourceOptions => ({

@@ -87,6 +87,13 @@ $ npm run test:e2e
 $ npm run test:cov
 ```
 
+E2E tests use a real PostgreSQL database (`nestjs_ecommerce_e2e`) and run migrations automatically.
+Start Postgres before running them:
+
+```bash
+docker compose up -d postgres
+```
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.

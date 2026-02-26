@@ -3,6 +3,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { createTypeOrmOptions } from './typeorm.config';
 
 @Module({
-  imports: [TypeOrmModule.forRoot(createTypeOrmOptions())],
+  imports: [
+    TypeOrmModule.forRootAsync({
+      useFactory: createTypeOrmOptions,
+    }),
+  ],
 })
 export class DatabaseModule {}

@@ -12,9 +12,9 @@ This backlog is intentionally sequenced to mimic real product work: feature deli
 |---|---|---|---|
 | 001 | API versioning baseline + deprecate unversioned root | - | Done |
 | 002 | Global validation pipe + consistent error envelope | 001 | Done |
-| 003 | `/v1/products` CRUD | 002 | Blocked |
-| 004 | `/v1/categories` CRUD | 002 | Blocked |
-| 005 | Shared pagination helper + products refactor | 003 | Blocked |
+| 003 | `/v1/products` CRUD | 002 | Done |
+| 004 | `/v1/categories` CRUD | 002 | Ready |
+| 005 | Shared pagination helper + products refactor | 003 | Ready |
 | 006 | `/v1/orders` list + detail (status/date filters) | 002, 005 | Blocked |
 | 007 | `/v1/orders/:id/cancel` state transition | 006 | Blocked |
 | 008 | `/v1/promotions` CRUD | 002 | Blocked |
