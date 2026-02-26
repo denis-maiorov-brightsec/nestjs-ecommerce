@@ -79,6 +79,29 @@ interface CategoryResponseBody {
   updatedAt: string;
 }
 
+type PromotionType = 'percentage' | 'fixed';
+
+interface PromotionResponseBody {
+  id: string;
+  name: string;
+  type: PromotionType;
+  value: number;
+  isActive: boolean;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface CreatePromotionPayload {
+  name?: string;
+  type?: PromotionType;
+  value?: number;
+  isActive?: boolean;
+  startsAt?: string;
+  endsAt?: string;
+}
+
 type OrderStatus = 'pending' | 'paid' | 'shipped' | 'cancelled';
 
 interface OrderResponseBody {
@@ -209,6 +232,23 @@ describe('AppController (e2e)', () => {
     return response.body as CategoryResponseBody;
   };
 
+  const createPromotion = async (
+    payload?: CreatePromotionPayload,
+  ): Promise<PromotionResponseBody> => {
+    const response = await request(app.getHttpServer())
+      .post('/v1/promotions')
+      .send({
+        name: 'Spring Sale',
+        type: 'percentage',
+        value: 15,
+        isActive: true,
+        ...(payload ?? {}),
+      })
+      .expect(201);
+
+    return response.body as PromotionResponseBody;
+  };
+
   const createOrder = async (
     payload?: CreateOrderPayload,
   ): Promise<OrderResponseBody> => {
@@ -298,7 +338,7 @@ describe('AppController (e2e)', () => {
     }
 
     await migrationDataSource.query(
-      'TRUNCATE TABLE "products", "categories", "orders" RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE "products", "categories", "orders", "promotions" RESTART IDENTITY CASCADE',
     );
   });
 
@@ -1161,6 +1201,261 @@ describe('AppController (e2e)', () => {
         code: 'NOT_FOUND',
         message:
           'Category with id "00000000-0000-0000-0000-000000000000" not found',
+      },
+    });
+  });
+
+  it('/v1/promotions (POST) creates a percentage promotion', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/v1/promotions')
+      .send({
+        name: 'Summer Sale',
+        type: 'percentage',
+        value: 20,
+        isActive: true,
+      })
+      .expect(201);
+    const body = response.body as PromotionResponseBody;
+
+    expect(body).toEqual(
+      expect.objectContaining({
+        name: 'Summer Sale',
+        type: 'percentage',
+        value: 20,
+        isActive: true,
+      }),
+    );
+    expect(body.startsAt).toBeNull();
+    expect(body.endsAt).toBeNull();
+    expect(typeof body.id).toBe('string');
+    expect(typeof body.createdAt).toBe('string');
+    expect(typeof body.updatedAt).toBe('string');
+  });
+
+  it('/v1/promotions (POST) creates a fixed promotion with schedule', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/v1/promotions')
+      .send({
+        name: 'Holiday Voucher',
+        type: 'fixed',
+        value: 35,
+        isActive: false,
+        startsAt: '2025-02-01T00:00:00.000Z',
+        endsAt: '2025-02-15T23:59:59.000Z',
+      })
+      .expect(201);
+    const body = response.body as PromotionResponseBody;
+
+    expect(body).toEqual(
+      expect.objectContaining({
+        name: 'Holiday Voucher',
+        type: 'fixed',
+        value: 35,
+        isActive: false,
+        startsAt: '2025-02-01T00:00:00.000Z',
+        endsAt: '2025-02-15T23:59:59.000Z',
+      }),
+    );
+  });
+
+  it('/v1/promotions (GET) lists all created promotions', async () => {
+    await createPromotion({
+      name: 'Promo A',
+      type: 'percentage',
+      value: 10,
+    });
+    await createPromotion({
+      name: 'Promo B',
+      type: 'fixed',
+      value: 25,
+    });
+
+    const response = await request(app.getHttpServer())
+      .get('/v1/promotions')
+      .expect(200);
+
+    expect(response.body).toHaveLength(2);
+    expect(response.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'Promo A',
+          type: 'percentage',
+          value: 10,
+        }),
+        expect.objectContaining({
+          name: 'Promo B',
+          type: 'fixed',
+          value: 25,
+        }),
+      ]),
+    );
+  });
+
+  it('/v1/promotions/:id (GET) returns one promotion', async () => {
+    const createdPromotion = await createPromotion({
+      name: 'Weekend Sale',
+      type: 'percentage',
+      value: 12,
+    });
+
+    const response = await request(app.getHttpServer())
+      .get(`/v1/promotions/${createdPromotion.id}`)
+      .expect(200);
+
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        id: createdPromotion.id,
+        name: 'Weekend Sale',
+        type: 'percentage',
+        value: 12,
+      }),
+    );
+  });
+
+  it('/v1/promotions/:id (PATCH) updates a fixed promotion to percentage', async () => {
+    const createdPromotion = await createPromotion({
+      type: 'fixed',
+      value: 50,
+      name: 'Cross Type Promo',
+    });
+
+    const response = await request(app.getHttpServer())
+      .patch(`/v1/promotions/${createdPromotion.id}`)
+      .send({
+        type: 'percentage',
+        value: 25,
+      })
+      .expect(200);
+    const body = response.body as PromotionResponseBody;
+
+    expect(body).toEqual(
+      expect.objectContaining({
+        id: createdPromotion.id,
+        name: 'Cross Type Promo',
+        type: 'percentage',
+        value: 25,
+      }),
+    );
+  });
+
+  it('/v1/promotions/:id (PATCH) updates a percentage promotion to fixed', async () => {
+    const createdPromotion = await createPromotion({
+      type: 'percentage',
+      value: 30,
+      name: 'Cross Type Promo 2',
+    });
+
+    const response = await request(app.getHttpServer())
+      .patch(`/v1/promotions/${createdPromotion.id}`)
+      .send({
+        type: 'fixed',
+        value: 15,
+      })
+      .expect(200);
+    const body = response.body as PromotionResponseBody;
+
+    expect(body).toEqual(
+      expect.objectContaining({
+        id: createdPromotion.id,
+        name: 'Cross Type Promo 2',
+        type: 'fixed',
+        value: 15,
+      }),
+    );
+  });
+
+  it('/v1/promotions (POST) returns 400 for invalid percentage value', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/v1/promotions')
+      .send({
+        name: 'Invalid Percentage',
+        type: 'percentage',
+        value: 150,
+        isActive: true,
+      })
+      .expect(400);
+    const body = response.body as ErrorResponseBody;
+
+    expect(body).toMatchObject({
+      path: '/v1/promotions',
+      error: {
+        code: 'BAD_REQUEST',
+        message:
+          '"value" must be between 1 and 100 for "percentage" promotions',
+      },
+    });
+  });
+
+  it('/v1/promotions (POST) returns 400 for invalid fixed value', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/v1/promotions')
+      .send({
+        name: 'Invalid Fixed',
+        type: 'fixed',
+        value: 0,
+        isActive: true,
+      })
+      .expect(400);
+    const body = response.body as ErrorResponseBody;
+
+    expect(body).toMatchObject({
+      path: '/v1/promotions',
+      error: {
+        code: 'BAD_REQUEST',
+        message: '"value" must be greater than 0 for "fixed" promotions',
+      },
+    });
+  });
+
+  it('/v1/promotions/:id (PATCH) returns 400 for invalid type/value combinations', async () => {
+    const createdPromotion = await createPromotion({
+      type: 'fixed',
+      value: 150,
+      name: 'Type Flip Validation',
+    });
+
+    const response = await request(app.getHttpServer())
+      .patch(`/v1/promotions/${createdPromotion.id}`)
+      .send({
+        type: 'percentage',
+      })
+      .expect(400);
+    const body = response.body as ErrorResponseBody;
+
+    expect(body).toMatchObject({
+      path: `/v1/promotions/${createdPromotion.id}`,
+      error: {
+        code: 'BAD_REQUEST',
+        message:
+          '"value" must be between 1 and 100 for "percentage" promotions',
+      },
+    });
+  });
+
+  it('/v1/promotions/:id (DELETE) returns 204 and removes promotion', async () => {
+    const createdPromotion = await createPromotion();
+
+    await request(app.getHttpServer())
+      .delete(`/v1/promotions/${createdPromotion.id}`)
+      .expect(204);
+
+    await request(app.getHttpServer())
+      .get(`/v1/promotions/${createdPromotion.id}`)
+      .expect(404);
+  });
+
+  it('/v1/promotions/:id (DELETE) returns 404 for missing promotion', async () => {
+    const response = await request(app.getHttpServer())
+      .delete('/v1/promotions/00000000-0000-0000-0000-000000000000')
+      .expect(404);
+    const body = response.body as ErrorResponseBody;
+
+    expect(body).toMatchObject({
+      path: '/v1/promotions/00000000-0000-0000-0000-000000000000',
+      error: {
+        code: 'NOT_FOUND',
+        message:
+          'Promotion with id "00000000-0000-0000-0000-000000000000" not found',
       },
     });
   });

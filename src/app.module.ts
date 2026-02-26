@@ -5,9 +5,16 @@ import { DatabaseModule } from './database/database.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { ProductsModule } from './modules/products/products.module';
+import { PromotionsModule } from './modules/promotions/promotions.module';
 
 @Module({
-  imports: [DatabaseModule, ProductsModule, CategoriesModule, OrdersModule],
+  imports: [
+    DatabaseModule,
+    ProductsModule,
+    CategoriesModule,
+    OrdersModule,
+    PromotionsModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })
