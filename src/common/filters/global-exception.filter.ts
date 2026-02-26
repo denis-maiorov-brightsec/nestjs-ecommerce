@@ -6,8 +6,14 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { REQUEST_ID_HEADER } from '../request-id/request-id.constants';
 
 type ErrorDetails = Array<{ field: string; constraints: string[] }>;
+type RequestWithId = Request & {
+  requestId?: string;
+  requestStartedAtMs?: number;
+  structuredLogWritten?: boolean;
+};
 
 interface ErrorBody {
   code: string;
@@ -47,8 +53,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     const context = host.switchToHttp();
     const response = context.getResponse<Response>();
-    const request = context.getRequest<Request>();
+    const request = context.getRequest<RequestWithId>();
     const status = this.getStatus(exception);
+    const requestId = this.getRequestId(request, response);
+    this.logUnhandledRequest(request, status, requestId);
 
     const responsePayload = this.getResponsePayload(exception);
     const defaultError =
@@ -67,6 +75,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     response.status(status).json({
       timestamp: new Date().toISOString(),
       path: request.url,
+      requestId,
       error: {
         code,
         message,
@@ -154,5 +163,50 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
   private isObject(value: unknown): value is Record<string, any> {
     return typeof value === 'object' && value !== null;
+  }
+
+  private getRequestId(request: RequestWithId, response: Response): string {
+    if (typeof request.requestId === 'string' && request.requestId !== '') {
+      return request.requestId;
+    }
+
+    const headerValue = response.getHeader(REQUEST_ID_HEADER);
+    if (typeof headerValue === 'string' && headerValue !== '') {
+      return headerValue;
+    }
+
+    return 'unknown';
+  }
+
+  private logUnhandledRequest(
+    request: RequestWithId,
+    statusCode: number,
+    requestId: string,
+  ): void {
+    if (request.structuredLogWritten) {
+      return;
+    }
+
+    request.structuredLogWritten = true;
+    const startedAt = request.requestStartedAtMs ?? Date.now();
+    const payload: Record<string, unknown> = {
+      requestId,
+      method: request.method,
+      path: request.originalUrl ?? request.url,
+      statusCode,
+      durationMs: Math.max(0, Date.now() - startedAt),
+      timestamp: new Date().toISOString(),
+    };
+
+    const userAgent = request.header('user-agent');
+    if (typeof userAgent === 'string' && userAgent !== '') {
+      payload.userAgent = userAgent;
+    }
+
+    if (typeof request.ip === 'string' && request.ip !== '') {
+      payload.ip = request.ip;
+    }
+
+    console.log(JSON.stringify(payload));
   }
 }

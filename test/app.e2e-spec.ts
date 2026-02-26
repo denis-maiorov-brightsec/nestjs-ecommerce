@@ -21,6 +21,8 @@ import { setupApp } from './../src/setup-app';
 const TEST_DB_NAME = 'nestjs_ecommerce_e2e';
 const TEST_ADMIN_TOKEN = 'test-admin-token';
 const TEST_RATE_LIMIT_MAX_REQUESTS = DEFAULT_WRITE_RATE_LIMIT.limit;
+const UUID_V4_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 class CreateValidationDto {
   @IsString()
@@ -46,6 +48,7 @@ class TestErrorController {
 interface ErrorResponseBody {
   timestamp: string;
   path: string;
+  requestId: string;
   error: {
     code: string;
     message: string;
@@ -367,6 +370,25 @@ describe('AppController (e2e)', () => {
       .expect({ status: 'ok' });
   });
 
+  it('adds x-request-id header when request id is not provided', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/v1/health')
+      .expect(200);
+
+    const requestIdHeader = response.header['x-request-id'];
+    expect(typeof requestIdHeader).toBe('string');
+    expect(requestIdHeader).toMatch(UUID_V4_REGEX);
+  });
+
+  it('propagates incoming x-request-id to response header', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/v1/health')
+      .set('x-request-id', 'req-from-client-123')
+      .expect(200);
+
+    expect(response.header['x-request-id']).toBe('req-from-client-123');
+  });
+
   it('/ (GET)', () => {
     return request(app.getHttpServer())
       .get('/')
@@ -400,6 +422,18 @@ describe('AppController (e2e)', () => {
         constraints: ['name should not be empty', 'name must be a string'],
       },
     ]);
+  });
+
+  it('returns requestId in error envelope matching x-request-id response header', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/v1/test/validation')
+      .set('x-request-id', 'req-error-001')
+      .send({})
+      .expect(400);
+    const body = response.body as ErrorResponseBody;
+
+    expect(response.header['x-request-id']).toBe('req-error-001');
+    expect(body.requestId).toBe('req-error-001');
   });
 
   it('returns not found envelope for unknown routes', async () => {

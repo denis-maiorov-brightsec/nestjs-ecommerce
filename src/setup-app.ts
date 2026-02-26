@@ -6,10 +6,14 @@ import {
   VersioningType,
 } from '@nestjs/common';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
+import { StructuredLoggingInterceptor } from './common/interceptors/structured-logging.interceptor';
+import { requestIdMiddleware } from './common/request-id/request-id.middleware';
 
 type ValidationDetails = Array<{ field: string; constraints: string[] }>;
 
 export function setupApp(app: INestApplication): void {
+  app.use(requestIdMiddleware);
+
   app.enableVersioning({
     type: VersioningType.URI,
   });
@@ -30,6 +34,7 @@ export function setupApp(app: INestApplication): void {
     }),
   );
 
+  app.useGlobalInterceptors(new StructuredLoggingInterceptor());
   app.useGlobalFilters(new GlobalExceptionFilter());
 }
 
