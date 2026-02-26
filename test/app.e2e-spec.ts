@@ -59,7 +59,7 @@ interface ErrorResponseBody {
 interface ProductResponseBody {
   id: string;
   name: string;
-  sku: string;
+  stockKeepingUnit: string;
   price: number;
   status: string;
   categoryId?: string;
@@ -214,7 +214,7 @@ describe('AppController (e2e)', () => {
       .post('/v1/products')
       .send({
         name: 'Keyboard',
-        sku: 'KB-001',
+        stockKeepingUnit: 'KB-001',
         price: 99.99,
         status: 'active',
         ...(payload ?? {}),
@@ -474,7 +474,7 @@ describe('AppController (e2e)', () => {
       .post('/v1/products')
       .send({
         name: 'Laptop',
-        sku: 'LP-001',
+        stockKeepingUnit: 'LP-001',
         price: 1299.99,
         status: 'active',
         categoryId: 'c-electronics',
@@ -483,13 +483,54 @@ describe('AppController (e2e)', () => {
 
     const body = response.body as ProductResponseBody;
     expect(body.name).toBe('Laptop');
-    expect(body.sku).toBe('LP-001');
+    expect(body.stockKeepingUnit).toBe('LP-001');
     expect(body.price).toBe(1299.99);
     expect(body.status).toBe('active');
     expect(body.categoryId).toBe('c-electronics');
     expect(typeof body.id).toBe('string');
     expect(typeof body.createdAt).toBe('string');
     expect(typeof body.updatedAt).toBe('string');
+    expect(body).not.toHaveProperty('sku');
+  });
+
+  it('/v1/products (POST) accepts deprecated sku alias during transition', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/v1/products')
+      .send({
+        name: 'Laptop',
+        sku: 'LP-ALIAS-001',
+        price: 1299.99,
+        status: 'active',
+      })
+      .expect(201);
+    const body = response.body as ProductResponseBody;
+
+    expect(body.name).toBe('Laptop');
+    expect(body.stockKeepingUnit).toBe('LP-ALIAS-001');
+    expect(body).not.toHaveProperty('sku');
+  });
+
+  it('/v1/products (POST) returns 400 when stockKeepingUnit and sku conflict', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/v1/products')
+      .send({
+        name: 'Laptop',
+        stockKeepingUnit: 'LP-001',
+        sku: 'LP-002',
+        price: 1299.99,
+        status: 'active',
+      })
+      .expect(400);
+    const body = response.body as ErrorResponseBody;
+
+    expect(body).toMatchObject({
+      path: '/v1/products',
+      error: {
+        code: 'BAD_REQUEST',
+        message:
+          '"stockKeepingUnit" and deprecated "sku" must match when both are provided',
+      },
+    });
   });
 
   it('/v1/products (POST) returns validation envelope for invalid payload', async () => {
@@ -497,7 +538,7 @@ describe('AppController (e2e)', () => {
       .post('/v1/products')
       .send({
         name: '',
-        sku: 'LP-001',
+        stockKeepingUnit: 'LP-001',
         price: -10,
         status: 'active',
       })
@@ -520,8 +561,8 @@ describe('AppController (e2e)', () => {
   });
 
   it('/v1/products (GET) lists all created products', async () => {
-    await createProduct({ name: 'Mouse', sku: 'MS-001' });
-    await createProduct({ name: 'Monitor', sku: 'MN-001' });
+    await createProduct({ name: 'Mouse', stockKeepingUnit: 'MS-001' });
+    await createProduct({ name: 'Monitor', stockKeepingUnit: 'MN-001' });
 
     const response = await request(app.getHttpServer())
       .get('/v1/products')
@@ -537,16 +578,19 @@ describe('AppController (e2e)', () => {
     expect(body.data).toHaveLength(2);
     expect(body.data).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ name: 'Mouse', sku: 'MS-001' }),
-        expect.objectContaining({ name: 'Monitor', sku: 'MN-001' }),
+        expect.objectContaining({ name: 'Mouse', stockKeepingUnit: 'MS-001' }),
+        expect.objectContaining({
+          name: 'Monitor',
+          stockKeepingUnit: 'MN-001',
+        }),
       ]),
     );
   });
 
   it('/v1/products (GET) supports pagination query params', async () => {
-    await createProduct({ name: 'Mouse', sku: 'MS-001' });
-    await createProduct({ name: 'Monitor', sku: 'MN-001' });
-    await createProduct({ name: 'Keyboard', sku: 'KB-002' });
+    await createProduct({ name: 'Mouse', stockKeepingUnit: 'MS-001' });
+    await createProduct({ name: 'Monitor', stockKeepingUnit: 'MN-001' });
+    await createProduct({ name: 'Keyboard', stockKeepingUnit: 'KB-002' });
 
     const response = await request(app.getHttpServer())
       .get('/v1/products?page=2&limit=2')
@@ -561,7 +605,7 @@ describe('AppController (e2e)', () => {
     });
     expect(body.data).toHaveLength(1);
     expect(body.data[0]).toEqual(
-      expect.objectContaining({ name: 'Keyboard', sku: 'KB-002' }),
+      expect.objectContaining({ name: 'Keyboard', stockKeepingUnit: 'KB-002' }),
     );
   });
 
@@ -613,10 +657,10 @@ describe('AppController (e2e)', () => {
     );
   });
 
-  it('/v1/search/products (GET) supports partial, case-insensitive matches by name and sku', async () => {
-    await createProduct({ name: 'Gaming Mouse', sku: 'GM-100' });
-    await createProduct({ name: 'Desk Lamp', sku: 'LP-200' });
-    await createProduct({ name: 'Notebook', sku: 'NB-300' });
+  it('/v1/search/products (GET) supports partial, case-insensitive matches by name and stockKeepingUnit', async () => {
+    await createProduct({ name: 'Gaming Mouse', stockKeepingUnit: 'GM-100' });
+    await createProduct({ name: 'Desk Lamp', stockKeepingUnit: 'LP-200' });
+    await createProduct({ name: 'Notebook', stockKeepingUnit: 'NB-300' });
 
     const byNameResponse = await request(app.getHttpServer())
       .get('/v1/search/products?q=MOU')
@@ -628,7 +672,7 @@ describe('AppController (e2e)', () => {
     expect(byNameBody.data[0]).toEqual(
       expect.objectContaining({
         name: 'Gaming Mouse',
-        sku: 'GM-100',
+        stockKeepingUnit: 'GM-100',
       }),
     );
 
@@ -642,16 +686,16 @@ describe('AppController (e2e)', () => {
     expect(bySkuBody.data[0]).toEqual(
       expect.objectContaining({
         name: 'Desk Lamp',
-        sku: 'LP-200',
+        stockKeepingUnit: 'LP-200',
       }),
     );
   });
 
   it('/v1/search/products (GET) returns paginated data with metadata', async () => {
-    await createProduct({ name: 'Pro Mouse', sku: 'PRO-001' });
-    await createProduct({ name: 'Pro Keyboard', sku: 'PRO-002' });
-    await createProduct({ name: 'Pro Display', sku: 'PRO-003' });
-    await createProduct({ name: 'Standard Dock', sku: 'STD-001' });
+    await createProduct({ name: 'Pro Mouse', stockKeepingUnit: 'PRO-001' });
+    await createProduct({ name: 'Pro Keyboard', stockKeepingUnit: 'PRO-002' });
+    await createProduct({ name: 'Pro Display', stockKeepingUnit: 'PRO-003' });
+    await createProduct({ name: 'Standard Dock', stockKeepingUnit: 'STD-001' });
 
     const response = await request(app.getHttpServer())
       .get('/v1/search/products?q=pro&page=2&limit=2')
@@ -668,13 +712,16 @@ describe('AppController (e2e)', () => {
     expect(body.data[0]).toEqual(
       expect.objectContaining({
         name: 'Pro Display',
-        sku: 'PRO-003',
+        stockKeepingUnit: 'PRO-003',
       }),
     );
   });
 
   it('/v1/products/:id (GET) returns one product', async () => {
-    const createdProduct = await createProduct({ name: 'Desk', sku: 'DK-001' });
+    const createdProduct = await createProduct({
+      name: 'Desk',
+      stockKeepingUnit: 'DK-001',
+    });
 
     const response = await request(app.getHttpServer())
       .get(`/v1/products/${createdProduct.id}`)
@@ -684,7 +731,7 @@ describe('AppController (e2e)', () => {
       expect.objectContaining({
         id: createdProduct.id,
         name: 'Desk',
-        sku: 'DK-001',
+        stockKeepingUnit: 'DK-001',
       }),
     );
   });
@@ -708,7 +755,7 @@ describe('AppController (e2e)', () => {
   it('/v1/products/:id (PATCH) updates a product', async () => {
     const createdProduct = await createProduct({
       name: 'Chair',
-      sku: 'CH-001',
+      stockKeepingUnit: 'CH-001',
     });
 
     const response = await request(app.getHttpServer())
@@ -722,11 +769,55 @@ describe('AppController (e2e)', () => {
     const body = response.body as ProductResponseBody;
     expect(body.id).toBe(createdProduct.id);
     expect(body.name).toBe('Chair');
-    expect(body.sku).toBe('CH-001');
+    expect(body.stockKeepingUnit).toBe('CH-001');
     expect(body.price).toBe(149.99);
     expect(body.status).toBe('inactive');
     expect(typeof body.createdAt).toBe('string');
     expect(typeof body.updatedAt).toBe('string');
+    expect(body).not.toHaveProperty('sku');
+  });
+
+  it('/v1/products/:id (PATCH) accepts deprecated sku alias during transition', async () => {
+    const createdProduct = await createProduct({
+      name: 'Chair',
+      stockKeepingUnit: 'CH-001',
+    });
+
+    const response = await request(app.getHttpServer())
+      .patch(`/v1/products/${createdProduct.id}`)
+      .send({
+        sku: 'CH-002',
+      })
+      .expect(200);
+    const body = response.body as ProductResponseBody;
+
+    expect(body.stockKeepingUnit).toBe('CH-002');
+    expect(body).not.toHaveProperty('sku');
+  });
+
+  it('/v1/products/:id (PATCH) returns 400 when stockKeepingUnit and sku conflict', async () => {
+    const createdProduct = await createProduct({
+      name: 'Chair',
+      stockKeepingUnit: 'CH-001',
+    });
+
+    const response = await request(app.getHttpServer())
+      .patch(`/v1/products/${createdProduct.id}`)
+      .send({
+        stockKeepingUnit: 'CH-002',
+        sku: 'CH-003',
+      })
+      .expect(400);
+    const body = response.body as ErrorResponseBody;
+
+    expect(body).toMatchObject({
+      path: `/v1/products/${createdProduct.id}`,
+      error: {
+        code: 'BAD_REQUEST',
+        message:
+          '"stockKeepingUnit" and deprecated "sku" must match when both are provided',
+      },
+    });
   });
 
   it('/v1/products/:id (PATCH) validates partial updates', async () => {
@@ -1344,7 +1435,10 @@ describe('AppController (e2e)', () => {
   });
 
   it('/v1/products (GET) remains unprotected without admin token', async () => {
-    await createProduct({ name: 'Public Product', sku: 'PUB-001' });
+    await createProduct({
+      name: 'Public Product',
+      stockKeepingUnit: 'PUB-001',
+    });
 
     const response = await request(app.getHttpServer())
       .get('/v1/products')
@@ -1353,7 +1447,10 @@ describe('AppController (e2e)', () => {
 
     expect(body.meta.total).toBe(1);
     expect(body.data[0]).toEqual(
-      expect.objectContaining({ name: 'Public Product', sku: 'PUB-001' }),
+      expect.objectContaining({
+        name: 'Public Product',
+        stockKeepingUnit: 'PUB-001',
+      }),
     );
   });
 
@@ -1695,7 +1792,7 @@ describe('AppController (e2e)', () => {
         .post('/v1/products')
         .send({
           name: `Rate Limited Product ${attempt}`,
-          sku: `RL-PROD-${attempt}`,
+          stockKeepingUnit: `RL-PROD-${attempt}`,
           price: 19.99,
           status: 'active',
         });
@@ -1707,7 +1804,7 @@ describe('AppController (e2e)', () => {
       .post('/v1/products')
       .send({
         name: 'Rate Limited Product Final',
-        sku: 'RL-PROD-FINAL',
+        stockKeepingUnit: 'RL-PROD-FINAL',
         price: 19.99,
         status: 'active',
       });
@@ -1813,7 +1910,7 @@ describe('AppController (e2e)', () => {
         .post('/v1/products')
         .send({
           name: `Readable Product ${attempt}`,
-          sku: `RL-GET-${attempt}`,
+          stockKeepingUnit: `RL-GET-${attempt}`,
           price: 29.99,
           status: 'active',
         });
@@ -1825,7 +1922,7 @@ describe('AppController (e2e)', () => {
       .post('/v1/products')
       .send({
         name: 'Readable Product Final',
-        sku: 'RL-GET-FINAL',
+        stockKeepingUnit: 'RL-GET-FINAL',
         price: 29.99,
         status: 'active',
       })

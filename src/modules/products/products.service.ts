@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   createPaginatedResponse,
   PaginatedResponse,
@@ -41,11 +45,29 @@ export class ProductsService {
   }
 
   create(payload: CreateProductDto): Promise<ProductEntity> {
-    return this.productsRepository.create(payload);
+    this.assertStockKeepingUnitAliasCompatibility(payload);
+    const stockKeepingUnit = this.resolveStockKeepingUnit(payload, true);
+
+    return this.productsRepository.create({
+      name: payload.name,
+      stockKeepingUnit,
+      price: payload.price,
+      status: payload.status,
+      categoryId: payload.categoryId,
+    });
   }
 
   async update(id: string, payload: UpdateProductDto): Promise<ProductEntity> {
-    const product = await this.productsRepository.update(id, payload);
+    this.assertStockKeepingUnitAliasCompatibility(payload);
+    const stockKeepingUnit = this.resolveStockKeepingUnit(payload, false);
+
+    const product = await this.productsRepository.update(id, {
+      name: payload.name,
+      stockKeepingUnit,
+      price: payload.price,
+      status: payload.status,
+      categoryId: payload.categoryId,
+    });
     if (!product) {
       throw new NotFoundException(`Product with id "${id}" not found`);
     }
@@ -58,5 +80,49 @@ export class ProductsService {
     if (!deleted) {
       throw new NotFoundException(`Product with id "${id}" not found`);
     }
+  }
+
+  private assertStockKeepingUnitAliasCompatibility(payload: {
+    stockKeepingUnit?: string;
+    sku?: string;
+  }): void {
+    if (
+      payload.stockKeepingUnit !== undefined &&
+      payload.sku !== undefined &&
+      payload.stockKeepingUnit !== payload.sku
+    ) {
+      throw new BadRequestException(
+        '"stockKeepingUnit" and deprecated "sku" must match when both are provided',
+      );
+    }
+  }
+
+  private resolveStockKeepingUnit(
+    payload: {
+      stockKeepingUnit?: string;
+      sku?: string;
+    },
+    required: true,
+  ): string;
+  private resolveStockKeepingUnit(
+    payload: {
+      stockKeepingUnit?: string;
+      sku?: string;
+    },
+    required: false,
+  ): string | undefined;
+  private resolveStockKeepingUnit(
+    payload: {
+      stockKeepingUnit?: string;
+      sku?: string;
+    },
+    required: boolean,
+  ): string | undefined {
+    const stockKeepingUnit = payload.stockKeepingUnit ?? payload.sku;
+    if (required && stockKeepingUnit === undefined) {
+      throw new BadRequestException('"stockKeepingUnit" is required');
+    }
+
+    return stockKeepingUnit;
   }
 }

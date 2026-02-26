@@ -15,6 +15,12 @@ export class UpdateProductDto {
   @IsOptional()
   @IsString()
   @IsNotEmpty()
+  stockKeepingUnit?: string;
+
+  // Deprecated request alias retained temporarily for backward compatibility.
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
   sku?: string;
 
   @IsOptional()

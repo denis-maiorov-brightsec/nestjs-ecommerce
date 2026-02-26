@@ -4,6 +4,7 @@ import {
   IsOptional,
   IsPositive,
   IsString,
+  ValidateIf,
 } from 'class-validator';
 
 export class CreateProductDto {
@@ -11,9 +12,19 @@ export class CreateProductDto {
   @IsNotEmpty()
   name!: string;
 
+  @ValidateIf(
+    ({ stockKeepingUnit, sku }: CreateProductDto) =>
+      stockKeepingUnit !== undefined || sku === undefined,
+  )
   @IsString()
   @IsNotEmpty()
-  sku!: string;
+  stockKeepingUnit?: string;
+
+  // Deprecated request alias retained temporarily for backward compatibility.
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  sku?: string;
 
   @IsNumber()
   @IsPositive()

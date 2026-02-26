@@ -2,9 +2,23 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { PaginationParams } from '../../common/pagination/pagination.helper';
-import { CreateProductDto } from './create-product.dto';
 import { ProductEntity } from './product.entity';
-import { UpdateProductDto } from './update-product.dto';
+
+interface ProductWritePayload {
+  name: string;
+  stockKeepingUnit: string;
+  price: number;
+  status: string;
+  categoryId?: string;
+}
+
+interface ProductUpdatePayload {
+  name?: string;
+  stockKeepingUnit?: string;
+  price?: number;
+  status?: string;
+  categoryId?: string;
+}
 
 @Injectable()
 export class ProductsRepository {
@@ -35,7 +49,7 @@ export class ProductsRepository {
     const [data, total] = await this.repository
       .createQueryBuilder('product')
       .where('product.name ILIKE :searchTerm', { searchTerm })
-      .orWhere('product.sku ILIKE :searchTerm', { searchTerm })
+      .orWhere('product.stockKeepingUnit ILIKE :searchTerm', { searchTerm })
       .orderBy('product.createdAt', 'ASC')
       .skip(pagination.offset)
       .take(pagination.limit)
@@ -50,14 +64,14 @@ export class ProductsRepository {
     });
   }
 
-  async create(payload: CreateProductDto): Promise<ProductEntity> {
+  async create(payload: ProductWritePayload): Promise<ProductEntity> {
     const product = this.repository.create(payload);
     return this.repository.save(product);
   }
 
   async update(
     id: string,
-    payload: UpdateProductDto,
+    payload: ProductUpdatePayload,
   ): Promise<ProductEntity | null> {
     const product = await this.findById(id);
     if (!product) {
@@ -68,8 +82,8 @@ export class ProductsRepository {
       product.name = payload.name;
     }
 
-    if (payload.sku !== undefined) {
-      product.sku = payload.sku;
+    if (payload.stockKeepingUnit !== undefined) {
+      product.stockKeepingUnit = payload.stockKeepingUnit;
     }
 
     if (payload.price !== undefined) {

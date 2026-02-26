@@ -14,8 +14,8 @@ export class ProductEntity {
   @Column({ type: 'varchar', length: 255 })
   name!: string;
 
-  @Column({ type: 'varchar', length: 128 })
-  sku!: string;
+  @Column({ name: 'sku', type: 'varchar', length: 128 })
+  stockKeepingUnit!: string;
 
   @Column({ type: 'double precision' })
   price!: number;
