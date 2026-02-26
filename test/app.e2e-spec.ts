@@ -60,6 +60,16 @@ interface ProductResponseBody {
   updatedAt: string;
 }
 
+interface PaginatedResponseBody<T> {
+  data: T[];
+  meta: {
+    page: number;
+    limit: number;
+    total: number;
+    hasNext: boolean;
+  };
+}
+
 interface CategoryResponseBody {
   id: string;
   name: string;
@@ -328,14 +338,55 @@ describe('AppController (e2e)', () => {
     const response = await request(app.getHttpServer())
       .get('/v1/products')
       .expect(200);
+    const body = response.body as PaginatedResponseBody<ProductResponseBody>;
 
-    expect(response.body).toHaveLength(2);
-    expect(response.body).toEqual(
+    expect(body.meta).toEqual({
+      page: 1,
+      limit: 20,
+      total: 2,
+      hasNext: false,
+    });
+    expect(body.data).toHaveLength(2);
+    expect(body.data).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: 'Mouse', sku: 'MS-001' }),
         expect.objectContaining({ name: 'Monitor', sku: 'MN-001' }),
       ]),
     );
+  });
+
+  it('/v1/products (GET) supports pagination query params', async () => {
+    await createProduct({ name: 'Mouse', sku: 'MS-001' });
+    await createProduct({ name: 'Monitor', sku: 'MN-001' });
+    await createProduct({ name: 'Keyboard', sku: 'KB-002' });
+
+    const response = await request(app.getHttpServer())
+      .get('/v1/products?page=2&limit=2')
+      .expect(200);
+    const body = response.body as PaginatedResponseBody<ProductResponseBody>;
+
+    expect(body.meta).toEqual({
+      page: 2,
+      limit: 2,
+      total: 3,
+      hasNext: false,
+    });
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0]).toEqual(
+      expect.objectContaining({ name: 'Keyboard', sku: 'KB-002' }),
+    );
+  });
+
+  it('/v1/products (GET) returns 400 for invalid pagination params', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/v1/products?page=0')
+      .expect(400);
+    const body = response.body as ErrorResponseBody;
+
+    expect(body.error).toEqual({
+      code: 'BAD_REQUEST',
+      message: '"page" must be a positive integer',
+    });
   });
 
   it('/v1/products/:id (GET) returns one product', async () => {

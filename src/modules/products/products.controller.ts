@@ -8,8 +8,11 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Version,
 } from '@nestjs/common';
+import { parsePaginationQuery } from '../../common/pagination/pagination.helper';
+import type { PaginationQuery } from '../../common/pagination/pagination.helper';
 import { CreateProductDto } from './create-product.dto';
 import { ProductsService } from './products.service';
 import { UpdateProductDto } from './update-product.dto';
@@ -20,8 +23,8 @@ export class ProductsController {
 
   @Version('1')
   @Get()
-  findAll() {
-    return this.productsService.findAll();
+  findAll(@Query() query: PaginationQuery) {
+    return this.productsService.findAll(parsePaginationQuery(query));
   }
 
   @Version('1')

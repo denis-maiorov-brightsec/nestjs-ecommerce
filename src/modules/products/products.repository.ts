@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { PaginationParams } from '../../common/pagination/pagination.helper';
 import { CreateProductDto } from './create-product.dto';
 import { ProductEntity } from './product.entity';
 import { UpdateProductDto } from './update-product.dto';
@@ -12,12 +13,18 @@ export class ProductsRepository {
     private readonly repository: Repository<ProductEntity>,
   ) {}
 
-  findAll(): Promise<ProductEntity[]> {
-    return this.repository.find({
+  async findAll(
+    pagination: PaginationParams,
+  ): Promise<{ data: ProductEntity[]; total: number }> {
+    const [data, total] = await this.repository.findAndCount({
       order: {
         createdAt: 'ASC',
       },
+      skip: pagination.offset,
+      take: pagination.limit,
     });
+
+    return { data, total };
   }
 
   findById(id: string): Promise<ProductEntity | null> {
