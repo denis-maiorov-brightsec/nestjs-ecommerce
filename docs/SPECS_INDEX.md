@@ -18,7 +18,7 @@ This backlog is intentionally sequenced to mimic real product work: feature deli
 | 006 | `/v1/orders` list + detail (status/date filters) | 002, 005 | Ready |
 | 007 | `/v1/orders/:id/cancel` state transition | 006 | Blocked |
 | 008 | `/v1/promotions` CRUD | 002 | Done |
-| 009 | Auth guard stub + protect promotions endpoints | 008 | Ready |
+| 009 | Auth guard stub + protect promotions endpoints | 008 | Done |
 | 010 | Write-route rate limiting middleware | 003, 004, 007, 009 | Blocked |
 | 011 | Request ID + structured logging interceptor | 002 | Blocked |
 | 012 | `/v1/search/products?q=` (reuse Products service) | 003, 005 | Ready |

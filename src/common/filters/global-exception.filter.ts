@@ -16,6 +16,10 @@ interface ErrorBody {
 }
 
 const DEFAULT_ERROR_BY_STATUS: Record<number, Omit<ErrorBody, 'details'>> = {
+  [HttpStatus.UNAUTHORIZED]: {
+    code: 'UNAUTHORIZED',
+    message: 'Unauthorized',
+  },
   [HttpStatus.BAD_REQUEST]: {
     code: 'BAD_REQUEST',
     message: 'Bad request',

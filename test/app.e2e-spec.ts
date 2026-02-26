@@ -17,6 +17,7 @@ import { createDataSourceOptions } from './../src/database/typeorm.config';
 import { setupApp } from './../src/setup-app';
 
 const TEST_DB_NAME = 'nestjs_ecommerce_e2e';
+const TEST_ADMIN_TOKEN = 'test-admin-token';
 
 class CreateValidationDto {
   @IsString()
@@ -142,6 +143,7 @@ interface RawOrderRow extends Omit<
 
 function applyTestDatabaseEnv(): void {
   process.env.NODE_ENV = 'production';
+  process.env.ADMIN_TOKEN = TEST_ADMIN_TOKEN;
   process.env.DB_SYNCHRONIZE = 'false';
   process.env.DB_LOGGING = 'false';
   process.env.DB_HOST = process.env.DB_HOST ?? 'localhost';
@@ -237,6 +239,7 @@ describe('AppController (e2e)', () => {
   ): Promise<PromotionResponseBody> => {
     const response = await request(app.getHttpServer())
       .post('/v1/promotions')
+      .set('x-admin-token', TEST_ADMIN_TOKEN)
       .send({
         name: 'Spring Sale',
         type: 'percentage',
@@ -1205,9 +1208,62 @@ describe('AppController (e2e)', () => {
     });
   });
 
+  it('/v1/products (GET) remains unprotected without admin token', async () => {
+    await createProduct({ name: 'Public Product', sku: 'PUB-001' });
+
+    const response = await request(app.getHttpServer())
+      .get('/v1/products')
+      .expect(200);
+    const body = response.body as PaginatedResponseBody<ProductResponseBody>;
+
+    expect(body.meta.total).toBe(1);
+    expect(body.data[0]).toEqual(
+      expect.objectContaining({ name: 'Public Product', sku: 'PUB-001' }),
+    );
+  });
+
+  it('/v1/promotions (GET) returns 401 without x-admin-token', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/v1/promotions')
+      .expect(401);
+    const body = response.body as ErrorResponseBody;
+
+    expect(body).toMatchObject({
+      path: '/v1/promotions',
+      error: {
+        code: 'UNAUTHORIZED',
+        message: 'Invalid or missing admin token',
+      },
+    });
+  });
+
+  it('/v1/promotions (GET) succeeds with valid x-admin-token', async () => {
+    await createPromotion({
+      name: 'Authorized Promo',
+      type: 'fixed',
+      value: 30,
+    });
+
+    const response = await request(app.getHttpServer())
+      .get('/v1/promotions')
+      .set('x-admin-token', TEST_ADMIN_TOKEN)
+      .expect(200);
+    const body = response.body as PromotionResponseBody[];
+
+    expect(body).toHaveLength(1);
+    expect(body[0]).toEqual(
+      expect.objectContaining({
+        name: 'Authorized Promo',
+        type: 'fixed',
+        value: 30,
+      }),
+    );
+  });
+
   it('/v1/promotions (POST) creates a percentage promotion', async () => {
     const response = await request(app.getHttpServer())
       .post('/v1/promotions')
+      .set('x-admin-token', TEST_ADMIN_TOKEN)
       .send({
         name: 'Summer Sale',
         type: 'percentage',
@@ -1235,6 +1291,7 @@ describe('AppController (e2e)', () => {
   it('/v1/promotions (POST) creates a fixed promotion with schedule', async () => {
     const response = await request(app.getHttpServer())
       .post('/v1/promotions')
+      .set('x-admin-token', TEST_ADMIN_TOKEN)
       .send({
         name: 'Holiday Voucher',
         type: 'fixed',
@@ -1272,6 +1329,7 @@ describe('AppController (e2e)', () => {
 
     const response = await request(app.getHttpServer())
       .get('/v1/promotions')
+      .set('x-admin-token', TEST_ADMIN_TOKEN)
       .expect(200);
 
     expect(response.body).toHaveLength(2);
@@ -1300,6 +1358,7 @@ describe('AppController (e2e)', () => {
 
     const response = await request(app.getHttpServer())
       .get(`/v1/promotions/${createdPromotion.id}`)
+      .set('x-admin-token', TEST_ADMIN_TOKEN)
       .expect(200);
 
     expect(response.body).toEqual(
@@ -1321,6 +1380,7 @@ describe('AppController (e2e)', () => {
 
     const response = await request(app.getHttpServer())
       .patch(`/v1/promotions/${createdPromotion.id}`)
+      .set('x-admin-token', TEST_ADMIN_TOKEN)
       .send({
         type: 'percentage',
         value: 25,
@@ -1347,6 +1407,7 @@ describe('AppController (e2e)', () => {
 
     const response = await request(app.getHttpServer())
       .patch(`/v1/promotions/${createdPromotion.id}`)
+      .set('x-admin-token', TEST_ADMIN_TOKEN)
       .send({
         type: 'fixed',
         value: 15,
@@ -1367,6 +1428,7 @@ describe('AppController (e2e)', () => {
   it('/v1/promotions (POST) returns 400 for invalid percentage value', async () => {
     const response = await request(app.getHttpServer())
       .post('/v1/promotions')
+      .set('x-admin-token', TEST_ADMIN_TOKEN)
       .send({
         name: 'Invalid Percentage',
         type: 'percentage',
@@ -1389,6 +1451,7 @@ describe('AppController (e2e)', () => {
   it('/v1/promotions (POST) returns 400 for invalid fixed value', async () => {
     const response = await request(app.getHttpServer())
       .post('/v1/promotions')
+      .set('x-admin-token', TEST_ADMIN_TOKEN)
       .send({
         name: 'Invalid Fixed',
         type: 'fixed',
@@ -1416,6 +1479,7 @@ describe('AppController (e2e)', () => {
 
     const response = await request(app.getHttpServer())
       .patch(`/v1/promotions/${createdPromotion.id}`)
+      .set('x-admin-token', TEST_ADMIN_TOKEN)
       .send({
         type: 'percentage',
       })
@@ -1437,16 +1501,19 @@ describe('AppController (e2e)', () => {
 
     await request(app.getHttpServer())
       .delete(`/v1/promotions/${createdPromotion.id}`)
+      .set('x-admin-token', TEST_ADMIN_TOKEN)
       .expect(204);
 
     await request(app.getHttpServer())
       .get(`/v1/promotions/${createdPromotion.id}`)
+      .set('x-admin-token', TEST_ADMIN_TOKEN)
       .expect(404);
   });
 
   it('/v1/promotions/:id (DELETE) returns 404 for missing promotion', async () => {
     const response = await request(app.getHttpServer())
       .delete('/v1/promotions/00000000-0000-0000-0000-000000000000')
+      .set('x-admin-token', TEST_ADMIN_TOKEN)
       .expect(404);
     const body = response.body as ErrorResponseBody;
 

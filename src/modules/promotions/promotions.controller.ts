@@ -8,12 +8,15 @@ import {
   Param,
   Patch,
   Post,
+  UseGuards,
   Version,
 } from '@nestjs/common';
+import { AdminTokenGuard } from '../../common/guards/admin-token.guard';
 import { CreatePromotionDto } from './create-promotion.dto';
 import { PromotionsService } from './promotions.service';
 import { UpdatePromotionDto } from './update-promotion.dto';
 
+@UseGuards(AdminTokenGuard)
 @Controller('promotions')
 export class PromotionsController {
   constructor(private readonly promotionsService: PromotionsService) {}
