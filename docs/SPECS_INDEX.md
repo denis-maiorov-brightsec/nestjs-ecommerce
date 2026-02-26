@@ -21,8 +21,8 @@ This backlog is intentionally sequenced to mimic real product work: feature deli
 | 009 | Auth guard stub + protect promotions endpoints | 008 | Done |
 | 010 | Write-route rate limiting middleware | 003, 004, 007, 009 | Done |
 | 011 | Request ID + structured logging interceptor | 002 | Blocked |
-| 012 | `/v1/search/products?q=` (reuse Products service) | 003, 005 | Ready |
-| 013 | Rename `product.sku` -> `product.stockKeepingUnit` | 003, 012 | Blocked |
+| 012 | `/v1/search/products?q=` (reuse Products service) | 003, 005 | Done |
+| 013 | Rename `product.sku` -> `product.stockKeepingUnit` | 003, 012 | Ready |
 | 014 | Refactor Orders into `queries/commands` submodules | 007 | Blocked |
 | 015 | Contract tests for products routes | 013 | Blocked |
 | 016 | OpenAPI annotations for products/orders | 007, 013 | Blocked |

@@ -27,6 +27,23 @@ export class ProductsRepository {
     return { data, total };
   }
 
+  async search(
+    term: string,
+    pagination: PaginationParams,
+  ): Promise<{ data: ProductEntity[]; total: number }> {
+    const searchTerm = `%${term}%`;
+    const [data, total] = await this.repository
+      .createQueryBuilder('product')
+      .where('product.name ILIKE :searchTerm', { searchTerm })
+      .orWhere('product.sku ILIKE :searchTerm', { searchTerm })
+      .orderBy('product.createdAt', 'ASC')
+      .skip(pagination.offset)
+      .take(pagination.limit)
+      .getManyAndCount();
+
+    return { data, total };
+  }
+
   findById(id: string): Promise<ProductEntity | null> {
     return this.repository.findOne({
       where: { id },

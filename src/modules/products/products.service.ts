@@ -20,6 +20,17 @@ export class ProductsService {
     return createPaginatedResponse(data, total, pagination);
   }
 
+  async search(
+    term: string,
+    pagination: PaginationParams,
+  ): Promise<PaginatedResponse<ProductEntity>> {
+    const { data, total } = await this.productsRepository.search(
+      term,
+      pagination,
+    );
+    return createPaginatedResponse(data, total, pagination);
+  }
+
   async findOne(id: string): Promise<ProductEntity> {
     const product = await this.productsRepository.findById(id);
     if (!product) {

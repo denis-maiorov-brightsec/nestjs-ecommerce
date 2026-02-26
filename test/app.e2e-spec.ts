@@ -543,6 +543,102 @@ describe('AppController (e2e)', () => {
     });
   });
 
+  it('/v1/search/products (GET) returns 400 when q is missing', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/v1/search/products')
+      .expect(400);
+    const body = response.body as ErrorResponseBody;
+
+    expect(body).toMatchObject({
+      path: '/v1/search/products',
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'Request validation failed',
+      },
+    });
+    expect(body.error.details).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'q' })]),
+    );
+  });
+
+  it('/v1/search/products (GET) returns 400 when q is shorter than 2 chars', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/v1/search/products?q=a')
+      .expect(400);
+    const body = response.body as ErrorResponseBody;
+
+    expect(body).toMatchObject({
+      path: '/v1/search/products?q=a',
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'Request validation failed',
+      },
+    });
+    expect(body.error.details).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'q' })]),
+    );
+  });
+
+  it('/v1/search/products (GET) supports partial, case-insensitive matches by name and sku', async () => {
+    await createProduct({ name: 'Gaming Mouse', sku: 'GM-100' });
+    await createProduct({ name: 'Desk Lamp', sku: 'LP-200' });
+    await createProduct({ name: 'Notebook', sku: 'NB-300' });
+
+    const byNameResponse = await request(app.getHttpServer())
+      .get('/v1/search/products?q=MOU')
+      .expect(200);
+    const byNameBody =
+      byNameResponse.body as PaginatedResponseBody<ProductResponseBody>;
+
+    expect(byNameBody.data).toHaveLength(1);
+    expect(byNameBody.data[0]).toEqual(
+      expect.objectContaining({
+        name: 'Gaming Mouse',
+        sku: 'GM-100',
+      }),
+    );
+
+    const bySkuResponse = await request(app.getHttpServer())
+      .get('/v1/search/products?q=lp')
+      .expect(200);
+    const bySkuBody =
+      bySkuResponse.body as PaginatedResponseBody<ProductResponseBody>;
+
+    expect(bySkuBody.data).toHaveLength(1);
+    expect(bySkuBody.data[0]).toEqual(
+      expect.objectContaining({
+        name: 'Desk Lamp',
+        sku: 'LP-200',
+      }),
+    );
+  });
+
+  it('/v1/search/products (GET) returns paginated data with metadata', async () => {
+    await createProduct({ name: 'Pro Mouse', sku: 'PRO-001' });
+    await createProduct({ name: 'Pro Keyboard', sku: 'PRO-002' });
+    await createProduct({ name: 'Pro Display', sku: 'PRO-003' });
+    await createProduct({ name: 'Standard Dock', sku: 'STD-001' });
+
+    const response = await request(app.getHttpServer())
+      .get('/v1/search/products?q=pro&page=2&limit=2')
+      .expect(200);
+    const body = response.body as PaginatedResponseBody<ProductResponseBody>;
+
+    expect(body.meta).toEqual({
+      page: 2,
+      limit: 2,
+      total: 3,
+      hasNext: false,
+    });
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0]).toEqual(
+      expect.objectContaining({
+        name: 'Pro Display',
+        sku: 'PRO-003',
+      }),
+    );
+  });
+
   it('/v1/products/:id (GET) returns one product', async () => {
     const createdProduct = await createProduct({ name: 'Desk', sku: 'DK-001' });
 
