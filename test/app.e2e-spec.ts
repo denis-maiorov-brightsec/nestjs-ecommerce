@@ -79,6 +79,38 @@ interface CategoryResponseBody {
   updatedAt: string;
 }
 
+type OrderStatus = 'pending' | 'paid' | 'shipped' | 'cancelled';
+
+interface OrderResponseBody {
+  id: string;
+  status: OrderStatus;
+  customerId: string;
+  items: Array<Record<string, unknown>>;
+  currency: string;
+  totalAmount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface CreateOrderPayload {
+  status?: OrderStatus;
+  customerId?: string;
+  items?: Array<Record<string, unknown>>;
+  currency?: string;
+  totalAmount?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+interface RawOrderRow extends Omit<
+  OrderResponseBody,
+  'createdAt' | 'updatedAt' | 'totalAmount'
+> {
+  createdAt: string | Date;
+  updatedAt: string | Date;
+  totalAmount: number | string;
+}
+
 function applyTestDatabaseEnv(): void {
   process.env.NODE_ENV = 'production';
   process.env.DB_SYNCHRONIZE = 'false';
@@ -92,6 +124,10 @@ function applyTestDatabaseEnv(): void {
 
 function quoteIdentifier(value: string): string {
   return `"${value.replace(/"/g, '""')}"`;
+}
+
+function toIsoTimestamp(value: string | Date): string {
+  return new Date(value).toISOString();
 }
 
 async function ensureTestDatabase(): Promise<void> {
@@ -167,6 +203,61 @@ describe('AppController (e2e)', () => {
     return response.body as CategoryResponseBody;
   };
 
+  const createOrder = async (
+    payload?: CreateOrderPayload,
+  ): Promise<OrderResponseBody> => {
+    const createdAt = payload?.createdAt ?? '2025-01-01T00:00:00.000Z';
+    const updatedAt = payload?.updatedAt ?? createdAt;
+    const rows: RawOrderRow[] = await migrationDataSource.query(
+      `
+        INSERT INTO "orders" (
+          "status",
+          "customerId",
+          "items",
+          "currency",
+          "totalAmount",
+          "createdAt",
+          "updatedAt"
+        )
+        VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7)
+        RETURNING
+          "id",
+          "status",
+          "customerId",
+          "items",
+          "currency",
+          "totalAmount",
+          "createdAt",
+          "updatedAt"
+      `,
+      [
+        payload?.status ?? 'pending',
+        payload?.customerId ?? 'customer-001',
+        JSON.stringify(
+          payload?.items ?? [
+            {
+              productId: 'product-001',
+              quantity: 1,
+              unitPrice: 49.99,
+            },
+          ],
+        ),
+        payload?.currency ?? 'USD',
+        payload?.totalAmount ?? 49.99,
+        createdAt,
+        updatedAt,
+      ],
+    );
+
+    const createdOrder = rows[0];
+    return {
+      ...createdOrder,
+      totalAmount: Number(createdOrder.totalAmount),
+      createdAt: toIsoTimestamp(createdOrder.createdAt),
+      updatedAt: toIsoTimestamp(createdOrder.updatedAt),
+    };
+  };
+
   beforeAll(async () => {
     applyTestDatabaseEnv();
     await ensureTestDatabase();
@@ -192,7 +283,7 @@ describe('AppController (e2e)', () => {
     }
 
     await migrationDataSource.query(
-      'TRUNCATE TABLE "products", "categories" RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE "products", "categories", "orders" RESTART IDENTITY CASCADE',
     );
   });
 
@@ -517,6 +608,222 @@ describe('AppController (e2e)', () => {
           'Product with id "00000000-0000-0000-0000-000000000000" not found',
       },
     });
+  });
+
+  it('/v1/orders/:id (GET) returns one order with full representation', async () => {
+    const createdOrder = await createOrder({
+      status: 'paid',
+      customerId: 'customer-abc',
+      items: [
+        {
+          productId: 'product-123',
+          quantity: 2,
+          unitPrice: 30,
+        },
+      ],
+      currency: 'USD',
+      totalAmount: 60,
+      createdAt: '2025-01-10T10:00:00.000Z',
+      updatedAt: '2025-01-10T10:00:00.000Z',
+    });
+
+    const response = await request(app.getHttpServer())
+      .get(`/v1/orders/${createdOrder.id}`)
+      .expect(200);
+    const body = response.body as OrderResponseBody;
+
+    expect(body).toEqual(
+      expect.objectContaining({
+        id: createdOrder.id,
+        status: 'paid',
+        customerId: 'customer-abc',
+        items: [
+          {
+            productId: 'product-123',
+            quantity: 2,
+            unitPrice: 30,
+          },
+        ],
+        currency: 'USD',
+        totalAmount: 60,
+      }),
+    );
+    expect(typeof body.createdAt).toBe('string');
+    expect(typeof body.updatedAt).toBe('string');
+  });
+
+  it('/v1/orders/:id (GET) returns 404 for missing order', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/v1/orders/00000000-0000-0000-0000-000000000000')
+      .expect(404);
+    const body = response.body as ErrorResponseBody;
+
+    expect(body).toMatchObject({
+      path: '/v1/orders/00000000-0000-0000-0000-000000000000',
+      error: {
+        code: 'NOT_FOUND',
+        message:
+          'Order with id "00000000-0000-0000-0000-000000000000" not found',
+      },
+    });
+  });
+
+  it('/v1/orders (GET) filters by status', async () => {
+    await createOrder({
+      status: 'pending',
+      createdAt: '2025-01-01T00:00:00.000Z',
+    });
+    await createOrder({
+      status: 'paid',
+      createdAt: '2025-01-02T00:00:00.000Z',
+    });
+    await createOrder({
+      status: 'shipped',
+      createdAt: '2025-01-03T00:00:00.000Z',
+    });
+
+    const response = await request(app.getHttpServer())
+      .get('/v1/orders?status=paid')
+      .expect(200);
+    const body = response.body as PaginatedResponseBody<OrderResponseBody>;
+
+    expect(body.meta).toEqual({
+      page: 1,
+      limit: 20,
+      total: 1,
+      hasNext: false,
+    });
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0]).toEqual(
+      expect.objectContaining({
+        status: 'paid',
+      }),
+    );
+  });
+
+  it('/v1/orders (GET) filters by date range', async () => {
+    await createOrder({
+      status: 'pending',
+      createdAt: '2025-01-01T00:00:00.000Z',
+      updatedAt: '2025-01-01T00:00:00.000Z',
+    });
+    const inRangeOrder = await createOrder({
+      status: 'paid',
+      createdAt: '2025-01-05T12:00:00.000Z',
+      updatedAt: '2025-01-05T12:00:00.000Z',
+    });
+    await createOrder({
+      status: 'shipped',
+      createdAt: '2025-01-10T00:00:00.000Z',
+      updatedAt: '2025-01-10T00:00:00.000Z',
+    });
+
+    const response = await request(app.getHttpServer())
+      .get(
+        '/v1/orders?from=2025-01-02T00:00:00.000Z&to=2025-01-09T23:59:59.000Z',
+      )
+      .expect(200);
+    const body = response.body as PaginatedResponseBody<OrderResponseBody>;
+
+    expect(body.meta).toEqual({
+      page: 1,
+      limit: 20,
+      total: 1,
+      hasNext: false,
+    });
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].id).toBe(inRangeOrder.id);
+  });
+
+  it('/v1/orders (GET) supports combined filters and pagination metadata', async () => {
+    await createOrder({
+      status: 'pending',
+      customerId: 'customer-01',
+      createdAt: '2025-01-01T00:00:00.000Z',
+    });
+    await createOrder({
+      status: 'pending',
+      customerId: 'customer-02',
+      createdAt: '2025-01-02T00:00:00.000Z',
+    });
+    const expectedOrder = await createOrder({
+      status: 'pending',
+      customerId: 'customer-03',
+      createdAt: '2025-01-03T00:00:00.000Z',
+    });
+    await createOrder({
+      status: 'paid',
+      customerId: 'customer-04',
+      createdAt: '2025-01-04T00:00:00.000Z',
+    });
+
+    const response = await request(app.getHttpServer())
+      .get(
+        '/v1/orders?status=pending&from=2025-01-01T00:00:00.000Z&to=2025-01-31T23:59:59.000Z&page=2&limit=2',
+      )
+      .expect(200);
+    const body = response.body as PaginatedResponseBody<OrderResponseBody>;
+
+    expect(body.meta).toEqual({
+      page: 2,
+      limit: 2,
+      total: 3,
+      hasNext: false,
+    });
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].id).toBe(expectedOrder.id);
+    expect(body.data[0].status).toBe('pending');
+  });
+
+  it('/v1/orders (GET) returns 400 for invalid status filter', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/v1/orders?status=draft')
+      .expect(400);
+    const body = response.body as ErrorResponseBody;
+
+    expect(body.error).toEqual({
+      code: 'BAD_REQUEST',
+      message: '"status" must be one of: pending, paid, shipped, cancelled',
+    });
+  });
+
+  it('/v1/orders (GET) returns 400 for invalid date filter', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/v1/orders?from=2025-01-01')
+      .expect(400);
+    const body = response.body as ErrorResponseBody;
+
+    expect(body.error).toEqual({
+      code: 'BAD_REQUEST',
+      message: '"from" must be a valid ISO timestamp',
+    });
+  });
+
+  it('/v1/orders (GET) returns deterministic ordering for identical timestamps', async () => {
+    const firstOrder = await createOrder({
+      status: 'paid',
+      createdAt: '2025-01-05T09:00:00.000Z',
+      updatedAt: '2025-01-05T09:00:00.000Z',
+    });
+    const secondOrder = await createOrder({
+      status: 'paid',
+      createdAt: '2025-01-05T09:00:00.000Z',
+      updatedAt: '2025-01-05T09:00:00.000Z',
+    });
+    const thirdOrder = await createOrder({
+      status: 'paid',
+      createdAt: '2025-01-05T09:00:00.000Z',
+      updatedAt: '2025-01-05T09:00:00.000Z',
+    });
+
+    const response = await request(app.getHttpServer())
+      .get('/v1/orders?status=paid')
+      .expect(200);
+    const body = response.body as PaginatedResponseBody<OrderResponseBody>;
+
+    const actualIds = body.data.map((order) => order.id);
+    const expectedIds = [firstOrder.id, secondOrder.id, thirdOrder.id].sort();
+    expect(actualIds).toEqual(expectedIds);
   });
 
   it('/v1/categories (POST) creates a category', async () => {
