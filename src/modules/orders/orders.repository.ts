@@ -51,4 +51,12 @@ export class OrdersRepository {
       where: { id },
     });
   }
+
+  async cancel(order: OrderEntity, reason?: string): Promise<OrderEntity> {
+    order.status = 'cancelled';
+    order.cancelledAt = new Date();
+    order.cancellationReason = reason ?? null;
+
+    return this.repository.save(order);
+  }
 }

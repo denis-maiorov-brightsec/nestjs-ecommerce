@@ -1,9 +1,14 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   createPaginatedResponse,
   PaginatedResponse,
   PaginationParams,
 } from '../../common/pagination/pagination.helper';
+import { CancelOrderDto } from './cancel-order.dto';
 import { OrderEntity } from './order.entity';
 import { OrderFilters } from './orders-query.helper';
 import { OrdersRepository } from './orders.repository';
@@ -30,5 +35,22 @@ export class OrdersService {
     }
 
     return order;
+  }
+
+  async cancel(id: string, payload: CancelOrderDto = {}): Promise<OrderEntity> {
+    const order = await this.findOne(id);
+
+    if (order.status === 'cancelled') {
+      return order;
+    }
+
+    if (order.status === 'shipped') {
+      throw new ConflictException({
+        code: 'ORDER_STATUS_CONFLICT',
+        message: `Order with id "${id}" cannot be cancelled from status "shipped"`,
+      });
+    }
+
+    return this.ordersRepository.cancel(order, payload.reason);
   }
 }

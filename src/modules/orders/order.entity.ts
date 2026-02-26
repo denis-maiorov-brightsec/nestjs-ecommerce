@@ -27,6 +27,12 @@ export class OrderEntity {
   @Column({ type: 'double precision' })
   totalAmount!: number;
 
+  @Column({ type: 'timestamptz', nullable: true })
+  cancelledAt!: Date | null;
+
+  @Column({ type: 'varchar', length: 512, nullable: true })
+  cancellationReason!: string | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 

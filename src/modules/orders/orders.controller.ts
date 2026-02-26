@@ -1,4 +1,15 @@
-import { Controller, Get, Param, Query, Version } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Query,
+  Version,
+} from '@nestjs/common';
+import { CancelOrderDto } from './cancel-order.dto';
 import { parseOrdersListQuery } from './orders-query.helper';
 import type { OrdersListQuery } from './orders-query.helper';
 import { OrdersService } from './orders.service';
@@ -18,5 +29,12 @@ export class OrdersController {
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.ordersService.findOne(id);
+  }
+
+  @Version('1')
+  @Post(':id/cancel')
+  @HttpCode(HttpStatus.OK)
+  cancel(@Param('id') id: string, @Body() payload: CancelOrderDto) {
+    return this.ordersService.cancel(id, payload);
   }
 }

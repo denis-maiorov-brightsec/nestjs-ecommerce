@@ -88,6 +88,8 @@ interface OrderResponseBody {
   items: Array<Record<string, unknown>>;
   currency: string;
   totalAmount: number;
+  cancelledAt?: string | null;
+  cancellationReason?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -98,6 +100,8 @@ interface CreateOrderPayload {
   items?: Array<Record<string, unknown>>;
   currency?: string;
   totalAmount?: number;
+  cancelledAt?: string | null;
+  cancellationReason?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -106,6 +110,8 @@ interface RawOrderRow extends Omit<
   OrderResponseBody,
   'createdAt' | 'updatedAt' | 'totalAmount'
 > {
+  cancelledAt: string | Date | null;
+  cancellationReason: string | null;
   createdAt: string | Date;
   updatedAt: string | Date;
   totalAmount: number | string;
@@ -216,10 +222,12 @@ describe('AppController (e2e)', () => {
           "items",
           "currency",
           "totalAmount",
+          "cancelledAt",
+          "cancellationReason",
           "createdAt",
           "updatedAt"
         )
-        VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7)
+        VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9)
         RETURNING
           "id",
           "status",
@@ -227,6 +235,8 @@ describe('AppController (e2e)', () => {
           "items",
           "currency",
           "totalAmount",
+          "cancelledAt",
+          "cancellationReason",
           "createdAt",
           "updatedAt"
       `,
@@ -244,6 +254,8 @@ describe('AppController (e2e)', () => {
         ),
         payload?.currency ?? 'USD',
         payload?.totalAmount ?? 49.99,
+        payload?.cancelledAt ?? null,
+        payload?.cancellationReason ?? null,
         createdAt,
         updatedAt,
       ],
@@ -253,6 +265,9 @@ describe('AppController (e2e)', () => {
     return {
       ...createdOrder,
       totalAmount: Number(createdOrder.totalAmount),
+      cancelledAt: createdOrder.cancelledAt
+        ? toIsoTimestamp(createdOrder.cancelledAt)
+        : null,
       createdAt: toIsoTimestamp(createdOrder.createdAt),
       updatedAt: toIsoTimestamp(createdOrder.updatedAt),
     };
@@ -666,6 +681,102 @@ describe('AppController (e2e)', () => {
           'Order with id "00000000-0000-0000-0000-000000000000" not found',
       },
     });
+  });
+
+  it('/v1/orders/:id/cancel (POST) cancels a pending order and reflects status in detail/list', async () => {
+    const createdOrder = await createOrder({
+      status: 'pending',
+      updatedAt: '2025-01-10T10:00:00.000Z',
+    });
+
+    const cancelResponse = await request(app.getHttpServer())
+      .post(`/v1/orders/${createdOrder.id}/cancel`)
+      .send({
+        reason: 'Customer requested cancellation',
+      })
+      .expect(200);
+    const cancelledOrder = cancelResponse.body as OrderResponseBody;
+
+    expect(cancelledOrder).toEqual(
+      expect.objectContaining({
+        id: createdOrder.id,
+        status: 'cancelled',
+        cancellationReason: 'Customer requested cancellation',
+      }),
+    );
+    expect(typeof cancelledOrder.cancelledAt).toBe('string');
+    expect(new Date(cancelledOrder.updatedAt).getTime()).toBeGreaterThan(
+      new Date(createdOrder.updatedAt).getTime(),
+    );
+
+    const detailResponse = await request(app.getHttpServer())
+      .get(`/v1/orders/${createdOrder.id}`)
+      .expect(200);
+    expect((detailResponse.body as OrderResponseBody).status).toBe('cancelled');
+
+    const listResponse = await request(app.getHttpServer())
+      .get('/v1/orders?status=cancelled')
+      .expect(200);
+    const listBody =
+      listResponse.body as PaginatedResponseBody<OrderResponseBody>;
+
+    expect(listBody.meta.total).toBe(1);
+    expect(listBody.data[0].id).toBe(createdOrder.id);
+    expect(listBody.data[0].status).toBe('cancelled');
+  });
+
+  it('/v1/orders/:id/cancel (POST) returns 409 for shipped orders', async () => {
+    const shippedOrder = await createOrder({
+      status: 'shipped',
+    });
+
+    const response = await request(app.getHttpServer())
+      .post(`/v1/orders/${shippedOrder.id}/cancel`)
+      .send({
+        reason: 'Customer requested cancellation',
+      })
+      .expect(409);
+    const body = response.body as ErrorResponseBody;
+
+    expect(body).toMatchObject({
+      path: `/v1/orders/${shippedOrder.id}/cancel`,
+      error: {
+        code: 'ORDER_STATUS_CONFLICT',
+        message: `Order with id "${shippedOrder.id}" cannot be cancelled from status "shipped"`,
+      },
+    });
+
+    const detailResponse = await request(app.getHttpServer())
+      .get(`/v1/orders/${shippedOrder.id}`)
+      .expect(200);
+    expect((detailResponse.body as OrderResponseBody).status).toBe('shipped');
+  });
+
+  it('/v1/orders/:id/cancel (POST) is idempotent for already cancelled orders', async () => {
+    const createdOrder = await createOrder({
+      status: 'cancelled',
+      cancelledAt: '2025-01-11T12:00:00.000Z',
+      cancellationReason: 'Initial cancellation',
+      updatedAt: '2025-01-11T12:00:00.000Z',
+    });
+
+    const response = await request(app.getHttpServer())
+      .post(`/v1/orders/${createdOrder.id}/cancel`)
+      .send({
+        reason: 'New cancellation reason should be ignored',
+      })
+      .expect(200);
+    const body = response.body as OrderResponseBody;
+
+    expect(body).toEqual(
+      expect.objectContaining({
+        id: createdOrder.id,
+        status: 'cancelled',
+        cancelledAt: createdOrder.cancelledAt,
+        cancellationReason: 'Initial cancellation',
+        updatedAt: createdOrder.updatedAt,
+      }),
+    );
   });
 
   it('/v1/orders (GET) filters by status', async () => {
