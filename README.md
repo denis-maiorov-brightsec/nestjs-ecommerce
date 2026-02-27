@@ -74,6 +74,16 @@ $ npm run start:dev
 $ npm run start:prod
 ```
 
+## OpenAPI docs
+
+Swagger UI is exposed at:
+
+- `GET /docs`
+- `GET /docs-json` (raw OpenAPI JSON)
+
+The document is focused on `v1` routes, including products and orders endpoints, with
+error envelope examples and the documented deprecated request alias `sku`.
+
 ## Run tests
 
 ```bash

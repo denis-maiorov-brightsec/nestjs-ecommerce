@@ -147,6 +147,30 @@ interface RawOrderRow extends Omit<
   totalAmount: number | string;
 }
 
+interface OpenApiOperation {
+  summary?: string;
+  security?: Array<Record<string, unknown[]>>;
+}
+
+interface OpenApiPathItem {
+  get?: OpenApiOperation;
+  post?: OpenApiOperation;
+  patch?: OpenApiOperation;
+  delete?: OpenApiOperation;
+}
+
+interface OpenApiSchema {
+  properties?: Record<string, { deprecated?: boolean }>;
+}
+
+interface OpenApiDocument {
+  paths: Record<string, OpenApiPathItem>;
+  servers?: Array<{ url: string }>;
+  components?: {
+    schemas?: Record<string, OpenApiSchema>;
+  };
+}
+
 function applyTestDatabaseEnv(): void {
   process.env.NODE_ENV = 'production';
   process.env.ADMIN_TOKEN = TEST_ADMIN_TOKEN;
@@ -201,6 +225,22 @@ function createTestAppModule(appModule: typeof AppModule) {
   class TestAppModule {}
 
   return TestAppModule;
+}
+
+function getPathItem(
+  document: OpenApiDocument,
+  candidates: string[],
+): OpenApiPathItem {
+  for (const path of candidates) {
+    const pathItem = document.paths[path];
+    if (pathItem) {
+      return pathItem;
+    }
+  }
+
+  throw new Error(
+    `None of these OpenAPI paths were found: ${candidates.join(', ')}`,
+  );
 }
 
 describe('AppController (e2e)', () => {
@@ -368,6 +408,46 @@ describe('AppController (e2e)', () => {
       .get('/v1/health')
       .expect(200)
       .expect({ status: 'ok' });
+  });
+
+  it('/docs (GET) serves OpenAPI UI', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/docs')
+      .expect(200);
+
+    expect(response.header['content-type']).toContain('text/html');
+    expect(response.text).toContain('swagger-ui');
+  });
+
+  it('/docs-json (GET) exposes products/orders docs with v1 context', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/docs-json')
+      .expect(200);
+    const document = response.body as OpenApiDocument;
+
+    expect(document.servers).toEqual(
+      expect.arrayContaining([expect.objectContaining({ url: '/v1' })]),
+    );
+
+    const productsPath = getPathItem(document, ['/v1/products', '/products']);
+    expect(productsPath.get).toBeDefined();
+    expect(productsPath.post).toBeDefined();
+
+    const ordersPath = getPathItem(document, ['/v1/orders', '/orders']);
+    expect(ordersPath.get).toBeDefined();
+
+    const cancelPath = getPathItem(document, [
+      '/v1/orders/{id}/cancel',
+      '/orders/{id}/cancel',
+    ]);
+    expect(cancelPath.post).toBeDefined();
+    expect(cancelPath.post?.summary?.toLowerCase()).toContain(
+      'state transition',
+    );
+
+    const createProductSchema =
+      document.components?.schemas?.CreateProductDto?.properties?.sku;
+    expect(createProductSchema?.deprecated).toBe(true);
   });
 
   it('adds x-request-id header when request id is not provided', async () => {

@@ -5,6 +5,7 @@ import {
   ValidationPipe,
   VersioningType,
 } from '@nestjs/common';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { StructuredLoggingInterceptor } from './common/interceptors/structured-logging.interceptor';
 import { requestIdMiddleware } from './common/request-id/request-id.middleware';
@@ -36,6 +37,7 @@ export function setupApp(app: INestApplication): void {
 
   app.useGlobalInterceptors(new StructuredLoggingInterceptor());
   app.useGlobalFilters(new GlobalExceptionFilter());
+  setupOpenApi(app);
 }
 
 function extractValidationDetails(
@@ -57,4 +59,25 @@ function extractValidationDetails(
 
     return [...currentError, ...childErrors];
   });
+}
+
+function setupOpenApi(app: INestApplication): void {
+  const config = new DocumentBuilder()
+    .setTitle('E-commerce Backoffice API')
+    .setDescription('HTTP API documentation for v1 routes.')
+    .setVersion('1')
+    .addServer('/v1', 'Version 1 base path')
+    .addApiKey(
+      {
+        type: 'apiKey',
+        in: 'header',
+        name: 'x-admin-token',
+        description: 'Required only for promotions endpoints.',
+      },
+      'adminToken',
+    )
+    .build();
+
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('docs', app, document);
 }
