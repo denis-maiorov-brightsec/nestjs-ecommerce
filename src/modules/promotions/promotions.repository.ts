@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { CreatePromotionDto } from './create-promotion.dto';
+import { CreatePromotionDto } from './dto/create-promotion.dto';
 import { PromotionEntity } from './promotion.entity';
-import { UpdatePromotionDto } from './update-promotion.dto';
+import { UpdatePromotionDto } from './dto/update-promotion.dto';
 
 @Injectable()
 export class PromotionsRepository {

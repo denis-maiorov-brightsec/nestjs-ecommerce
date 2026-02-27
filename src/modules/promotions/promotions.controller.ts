@@ -14,9 +14,9 @@ import {
 import { AdminTokenGuard } from '../../common/guards/admin-token.guard';
 import { DEFAULT_WRITE_RATE_LIMIT } from '../../common/rate-limit/write-rate-limit.defaults';
 import { WriteRateLimit } from '../../common/rate-limit/write-rate-limit.decorator';
-import { CreatePromotionDto } from './create-promotion.dto';
+import { CreatePromotionDto } from './dto/create-promotion.dto';
 import { PromotionsService } from './promotions.service';
-import { UpdatePromotionDto } from './update-promotion.dto';
+import { UpdatePromotionDto } from './dto/update-promotion.dto';
 
 const PROMOTIONS_WRITE_RATE_LIMIT = {
   ...DEFAULT_WRITE_RATE_LIMIT,

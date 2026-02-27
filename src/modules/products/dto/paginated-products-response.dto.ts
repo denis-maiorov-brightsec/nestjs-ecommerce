@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { PaginationMetaDto } from '../../common/openapi/pagination-meta.dto';
-import { ProductEntity } from './product.entity';
+import { PaginationMetaDto } from '../../../common/openapi/pagination-meta.dto';
+import { ProductEntity } from '../product.entity';
 
 export class PaginatedProductsResponseDto {
   @ApiProperty({ type: () => [ProductEntity] })

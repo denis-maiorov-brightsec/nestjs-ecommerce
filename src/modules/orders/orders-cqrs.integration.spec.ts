@@ -1,5 +1,5 @@
 import type { PaginationParams } from '../../common/pagination/pagination.helper';
-import { CancelOrderDto } from './cancel-order.dto';
+import { CancelOrderDto } from './dto/cancel-order.dto';
 import { OrderEntity } from './order.entity';
 import { OrderFilters } from './orders-query.helper';
 import { OrdersRepository } from './orders.repository';

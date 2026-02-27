@@ -27,11 +27,11 @@ import { parsePaginationQuery } from '../../common/pagination/pagination.helper'
 import type { PaginationQuery } from '../../common/pagination/pagination.helper';
 import { DEFAULT_WRITE_RATE_LIMIT } from '../../common/rate-limit/write-rate-limit.defaults';
 import { WriteRateLimit } from '../../common/rate-limit/write-rate-limit.decorator';
-import { CreateProductDto } from './create-product.dto';
-import { PaginatedProductsResponseDto } from './paginated-products-response.dto';
+import { CreateProductDto } from './dto/create-product.dto';
+import { PaginatedProductsResponseDto } from './dto/paginated-products-response.dto';
 import { ProductEntity } from './product.entity';
 import { ProductsService } from './products.service';
-import { UpdateProductDto } from './update-product.dto';
+import { UpdateProductDto } from './dto/update-product.dto';
 
 const PRODUCTS_WRITE_RATE_LIMIT = {
   ...DEFAULT_WRITE_RATE_LIMIT,

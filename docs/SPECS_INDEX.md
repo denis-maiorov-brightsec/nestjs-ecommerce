@@ -26,7 +26,7 @@ This backlog is intentionally sequenced to mimic real product work: feature deli
 | 014 | Refactor Orders into `queries/commands` submodules | 007 | Done |
 | 015 | Contract tests for products routes | 013 | Ready |
 | 016 | OpenAPI annotations for products/orders | 007, 013 | Done |
-| 017 | Refactor DTOs into `/dto` folders and update imports | 016 | Ready |
+| 017 | Refactor DTOs into `/dto` folders and update imports | 016 | Done |
 
 ## Parallelization guidance
 - Can run in parallel once deps are satisfied:

@@ -7,7 +7,7 @@ import {
   IsOptional,
   IsString,
 } from 'class-validator';
-import { PROMOTION_TYPES } from './promotion-type';
+import { PROMOTION_TYPES } from '../promotion-type';
 
 export class UpdatePromotionDto {
   @IsOptional()

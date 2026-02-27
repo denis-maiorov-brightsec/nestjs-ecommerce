@@ -5,8 +5,8 @@ import {
 } from '@nestjs/common';
 import { CategoriesRepository } from './categories.repository';
 import { CategoryEntity } from './category.entity';
-import { CreateCategoryDto } from './create-category.dto';
-import { UpdateCategoryDto } from './update-category.dto';
+import { CreateCategoryDto } from './dto/create-category.dto';
+import { UpdateCategoryDto } from './dto/update-category.dto';
 
 @Injectable()
 export class CategoriesService {

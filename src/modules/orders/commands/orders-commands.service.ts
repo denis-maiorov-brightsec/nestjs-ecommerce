@@ -1,5 +1,5 @@
 import { ConflictException, Injectable } from '@nestjs/common';
-import { CancelOrderDto } from '../cancel-order.dto';
+import { CancelOrderDto } from '../dto/cancel-order.dto';
 import { OrderEntity } from '../order.entity';
 import { OrdersRepository } from '../orders.repository';
 import { OrdersQueriesService } from '../queries/orders-queries.service';

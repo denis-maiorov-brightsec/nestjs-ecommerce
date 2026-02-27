@@ -3,11 +3,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { CreatePromotionDto } from './create-promotion.dto';
+import { CreatePromotionDto } from './dto/create-promotion.dto';
 import { PromotionEntity } from './promotion.entity';
 import { PromotionType } from './promotion-type';
 import { PromotionsRepository } from './promotions.repository';
-import { UpdatePromotionDto } from './update-promotion.dto';
+import { UpdatePromotionDto } from './dto/update-promotion.dto';
 
 @Injectable()
 export class PromotionsService {

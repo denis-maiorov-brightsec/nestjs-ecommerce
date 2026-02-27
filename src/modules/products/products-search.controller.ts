@@ -7,9 +7,9 @@ import {
 } from '@nestjs/swagger';
 import { ErrorEnvelopeDto } from '../../common/openapi/error-envelope.dto';
 import { parsePaginationQuery } from '../../common/pagination/pagination.helper';
-import { PaginatedProductsResponseDto } from './paginated-products-response.dto';
+import { PaginatedProductsResponseDto } from './dto/paginated-products-response.dto';
 import { ProductsService } from './products.service';
-import { SearchProductsQueryDto } from './search-products-query.dto';
+import { SearchProductsQueryDto } from './dto/search-products-query.dto';
 
 @ApiTags('Products (v1)')
 @Controller('search/products')

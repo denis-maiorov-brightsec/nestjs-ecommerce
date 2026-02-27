@@ -8,10 +8,10 @@ import {
   PaginatedResponse,
   PaginationParams,
 } from '../../common/pagination/pagination.helper';
-import { CreateProductDto } from './create-product.dto';
+import { CreateProductDto } from './dto/create-product.dto';
 import { ProductEntity } from './product.entity';
 import { ProductsRepository } from './products.repository';
-import { UpdateProductDto } from './update-product.dto';
+import { UpdateProductDto } from './dto/update-product.dto';
 
 @Injectable()
 export class ProductsService {

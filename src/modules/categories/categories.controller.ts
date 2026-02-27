@@ -13,8 +13,8 @@ import {
 import { DEFAULT_WRITE_RATE_LIMIT } from '../../common/rate-limit/write-rate-limit.defaults';
 import { WriteRateLimit } from '../../common/rate-limit/write-rate-limit.decorator';
 import { CategoriesService } from './categories.service';
-import { CreateCategoryDto } from './create-category.dto';
-import { UpdateCategoryDto } from './update-category.dto';
+import { CreateCategoryDto } from './dto/create-category.dto';
+import { UpdateCategoryDto } from './dto/update-category.dto';
 
 const CATEGORIES_WRITE_RATE_LIMIT = {
   ...DEFAULT_WRITE_RATE_LIMIT,
