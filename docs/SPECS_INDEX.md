@@ -23,7 +23,7 @@ This backlog is intentionally sequenced to mimic real product work: feature deli
 | 011 | Request ID + structured logging interceptor | 002 | Done |
 | 012 | `/v1/search/products?q=` (reuse Products service) | 003, 005 | Done |
 | 013 | Rename `product.sku` -> `product.stockKeepingUnit` | 003, 012 | Done |
-| 014 | Refactor Orders into `queries/commands` submodules | 007 | Ready |
+| 014 | Refactor Orders into `queries/commands` submodules | 007 | Done |
 | 015 | Contract tests for products routes | 013 | Ready |
 | 016 | OpenAPI annotations for products/orders | 007, 013 | Ready |
 | 017 | Refactor DTOs into `/dto` folders and update imports | 016 | Blocked |

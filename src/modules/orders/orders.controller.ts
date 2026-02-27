@@ -11,10 +11,11 @@ import {
 } from '@nestjs/common';
 import { DEFAULT_WRITE_RATE_LIMIT } from '../../common/rate-limit/write-rate-limit.defaults';
 import { WriteRateLimit } from '../../common/rate-limit/write-rate-limit.decorator';
+import { OrdersCommandsService } from './commands/orders-commands.service';
 import { CancelOrderDto } from './cancel-order.dto';
 import { parseOrdersListQuery } from './orders-query.helper';
 import type { OrdersListQuery } from './orders-query.helper';
-import { OrdersService } from './orders.service';
+import { OrdersQueriesService } from './queries/orders-queries.service';
 
 const ORDERS_CANCEL_RATE_LIMIT = {
   ...DEFAULT_WRITE_RATE_LIMIT,
@@ -23,19 +24,22 @@ const ORDERS_CANCEL_RATE_LIMIT = {
 
 @Controller('orders')
 export class OrdersController {
-  constructor(private readonly ordersService: OrdersService) {}
+  constructor(
+    private readonly ordersQueriesService: OrdersQueriesService,
+    private readonly ordersCommandsService: OrdersCommandsService,
+  ) {}
 
   @Version('1')
   @Get()
   findAll(@Query() query: OrdersListQuery) {
     const { filters, pagination } = parseOrdersListQuery(query);
-    return this.ordersService.findAll(filters, pagination);
+    return this.ordersQueriesService.findAll(filters, pagination);
   }
 
   @Version('1')
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.ordersService.findOne(id);
+    return this.ordersQueriesService.findOne(id);
   }
 
   @Version('1')
@@ -43,6 +47,6 @@ export class OrdersController {
   @HttpCode(HttpStatus.OK)
   @WriteRateLimit(ORDERS_CANCEL_RATE_LIMIT)
   cancel(@Param('id') id: string, @Body() payload: CancelOrderDto) {
-    return this.ordersService.cancel(id, payload);
+    return this.ordersCommandsService.cancel(id, payload);
   }
 }
